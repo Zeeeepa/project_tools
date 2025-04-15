@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+
+# Function to wait for a service to be ready
+wait_for_service() {
+    local host="$1"
+    local port="$2"
+    local service="$3"
+    local timeout="${4:-30}"
+    
+    echo "Waiting for $service to be ready at $host:$port..."
+    
+    for i in $(seq 1 $timeout); do
+        if nc -z "$host" "$port" > /dev/null 2>&1; then
+            echo "$service is ready!"
+            return 0
+        fi
+        
+        echo "Waiting for $service... $i/$timeout"
+        sleep 1
+    done
+    
+    echo "Timeout reached waiting for $service at $host:$port"
+    return 1
+}
+
+# Wait for dependent services
+{% if wait_for_db | default(false) %}
+wait_for_service "{{ db_host | default('db') }}" "{{ db_port | default(5432) }}" "database"
+{% endif %}
+
+{% if wait_for_redis | default(false) %}
+wait_for_service "{{ redis_host | default('redis') }}" "{{ redis_port | default(6379) }}" "redis"
+{% endif %}
+
+{% for service in wait_for_services | default([]) %}
+wait_for_service "{{ service.host }}" "{{ service.port }}" "{{ service.name }}" "{{ service.timeout | default(30) }}"
+{% endfor %}
+
+# Run database migrations if needed
+{% if run_migrations | default(false) %}
+echo "Running database migrations..."
+python -m {{ python_package_name }}.db.migrations
+{% endif %}
+
+# Collect static files if needed
+{% if collect_static | default(false) %}
+echo "Collecting static files..."
+python -m {{ python_package_name }}.manage collectstatic --noinput
+{% endif %}
+
+# Create initial superuser if needed
+{% if create_superuser | default(false) %}
+echo "Creating superuser if it doesn't exist..."
+python -m {{ python_package_name }}.manage createsuperuser --noinput || true
+{% endif %}
+
+# Execute the command
+echo "Executing command: $@"
+exec "$@"

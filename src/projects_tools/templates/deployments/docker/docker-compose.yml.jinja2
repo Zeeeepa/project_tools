@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: {{ docker_image_name }}
+    container_name: {{ project_name }}-app
+    restart: unless-stopped
+    environment:
+      - DEBUG={{ debug | default(false) }}
+      - LOG_LEVEL={{ log_level | default('INFO') }}
+      - DATABASE_URL={{ database_url | default('sqlite:///app.db') }}
+      - API_URL={{ api_url | default('http://localhost:8000') }}
+      - ENVIRONMENT={{ environment_name | default('production') }}
+      {% for key, value in environment_variables.items() | default({}) %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+    volumes:
+      - ./data:/app/data
+      {% for volume in volumes | default([]) %}
+      - {{ volume }}
+      {% endfor %}
+    ports:
+      - "{{ host_port | default(8000) }}:{{ container_port | default(8000) }}"
+      {% for port in extra_ports | default([]) %}
+      - "{{ port }}"
+      {% endfor %}
+    {% if depends_on | default([]) %}
+    depends_on:
+      {% for service in depends_on %}
+      - {{ service }}
+      {% endfor %}
+    {% endif %}
+    {% if networks | default([]) %}
+    networks:
+      {% for network in networks %}
+      - {{ network }}
+      {% endfor %}
+    {% endif %}
+    {% if command %}
+    command: {{ command }}
+    {% endif %}
+
+  {% if include_db | default(false) %}
+  db:
+    image: {{ db_image | default('postgres:13-alpine') }}
+    container_name: {{ project_name }}-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER={{ db_user | default('postgres') }}
+      - POSTGRES_PASSWORD={{ db_password | default('postgres') }}
+      - POSTGRES_DB={{ db_name | default(project_name) }}
+    volumes:
+      - {{ project_name }}-db-data:/var/lib/postgresql/data
+    ports:
+      - "{{ db_host_port | default(5432) }}:5432"
+    {% if networks | default([]) %}
+    networks:
+      {% for network in networks %}
+      - {{ network }}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {% if include_redis | default(false) %}
+  redis:
+    image: {{ redis_image | default('redis:6-alpine') }}
+    container_name: {{ project_name }}-redis
+    restart: unless-stopped
+    volumes:
+      - {{ project_name }}-redis-data:/data
+    ports:
+      - "{{ redis_host_port | default(6379) }}:6379"
+    {% if networks | default([]) %}
+    networks:
+      {% for network in networks %}
+      - {{ network }}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+  {% if include_nginx | default(false) %}
+  nginx:
+    image: {{ nginx_image | default('nginx:alpine') }}
+    container_name: {{ project_name }}-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./static:/usr/share/nginx/html/static
+      - ./media:/usr/share/nginx/html/media
+    ports:
+      - "{{ nginx_host_port | default(80) }}:80"
+      {% if nginx_ssl_port | default(false) %}
+      - "{{ nginx_ssl_port }}:443"
+      {% endif %}
+    depends_on:
+      - app
+    {% if networks | default([]) %}
+    networks:
+      {% for network in networks %}
+      - {{ network }}
+      {% endfor %}
+    {% endif %}
+  {% endif %}
+
+{% if services | default([]) %}
+  {% for service in services %}
+  {{ service.name }}:
+    image: {{ service.image }}
+    container_name: {{ project_name }}-{{ service.name }}
+    restart: {{ service.restart | default('unless-stopped') }}
+    {% if service.environment | default([]) %}
+    environment:
+      {% for env in service.environment %}
+      - {{ env }}
+      {% endfor %}
+    {% endif %}
+    {% if service.volumes | default([]) %}
+    volumes:
+      {% for volume in service.volumes %}
+      - {{ volume }}
+      {% endfor %}
+    {% endif %}
+    {% if service.ports | default([]) %}
+    ports:
+      {% for port in service.ports %}
+      - "{{ port }}"
+      {% endfor %}
+    {% endif %}
+    {% if service.depends_on | default([]) %}
+    depends_on:
+      {% for dep in service.depends_on %}
+      - {{ dep }}
+      {% endfor %}
+    {% endif %}
+    {% if service.networks | default([]) %}
+    networks:
+      {% for network in service.networks %}
+      - {{ network }}
+      {% endfor %}
+    {% endif %}
+    {% if service.command | default(false) %}
+    command: {{ service.command }}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% if networks | default([]) %}
+networks:
+  {% for network in networks %}
+  {{ network }}:
+    driver: {{ network_driver | default('bridge') }}
+  {% endfor %}
+{% endif %}
+
+volumes:
+  {% if include_db | default(false) %}
+  {{ project_name }}-db-data:
+  {% endif %}
+  {% if include_redis | default(false) %}
+  {{ project_name }}-redis-data:
+  {% endif %}
+  {% for volume in extra_volumes | default([]) %}
+  {{ volume }}:
+  {% endfor %}

@@ -9,6 +9,7 @@ from rich import print as rprint
 
 # Import our new templating system
 from .templating import TemplateManager, ComponentGenerator, TemplateContext
+from .templating import DeploymentManager
 
 # Initialize Jinja2 environment and rich console
 env = Environment(
@@ -599,3 +600,149 @@ def list_components():
         console.print(f"- {component['name']}: {component['description']}")
         if component.get('base_component'):
             console.print(f"  Based on: {component['base_component']}")
+
+@cli.command()
+@click.argument('deployment_type')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--output-dir', default=None, help='Output directory for deployment files')
+@click.option('--environment', default=None, help='Environment to use (development, staging, production)')
+@click.option('--docker-image-name', default=None, help='Docker image name (for Docker deployments)')
+@click.option('--include-db/--no-db', default=False, help='Include database service (for Docker deployments)')
+@click.option('--include-redis/--no-redis', default=False, help='Include Redis service (for Docker deployments)')
+@click.option('--include-nginx/--no-nginx', default=False, help='Include Nginx service (for Docker deployments)')
+@click.option('--kubernetes-namespace', default=None, help='Kubernetes namespace (for Kubernetes deployments)')
+@click.option('--aws-region', default=None, help='AWS region (for serverless deployments)')
+@click.option('--aws-profile', default=None, help='AWS profile (for serverless deployments)')
+@click.option('--preview', is_flag=True, help='Preview deployment files without generating them')
+def generate_deployment(deployment_type, project_path, output_dir, environment, 
+                      docker_image_name, include_db, include_redis, include_nginx,
+                      kubernetes_namespace, aws_region, aws_profile, preview):
+    """Generate deployment files for a project."""
+    console.print(Panel(f"[bold blue]Generating {deployment_type} deployment[/bold blue]"))
+    
+    try:
+        # Get project name from directory
+        project_name = os.path.basename(os.path.abspath(project_path))
+        python_package_name = project_name.replace('-', '_').lower()
+        
+        # Set output directory
+        if output_dir is None:
+            output_dir = project_path
+        
+        # Initialize deployment manager
+        from .templating import DeploymentManager
+        deployment_manager = DeploymentManager(template_manager)
+        
+        # Load deployment registry
+        registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployments', 'registry', 'deployment_registry.json')
+        if os.path.exists(registry_path):
+            deployment_manager.load_deployment_registry(registry_path)
+        
+        # Create template context
+        context = TemplateContext({
+            'project_name': project_name,
+            'python_package_name': python_package_name,
+            'include_db': include_db,
+            'include_redis': include_redis,
+            'include_nginx': include_nginx
+        })
+        
+        # Add deployment-specific variables
+        if deployment_type == 'docker':
+            if docker_image_name is None:
+                docker_image_name = f"{project_name.lower()}:latest"
+            context.set('docker_image_name', docker_image_name)
+        elif deployment_type == 'kubernetes':
+            if kubernetes_namespace is None:
+                kubernetes_namespace = project_name.lower()
+            context.set('kubernetes_namespace', kubernetes_namespace)
+            if docker_image_name is None:
+                docker_image_name = f"{project_name.lower()}:latest"
+            context.set('docker_image_name', docker_image_name)
+        elif deployment_type == 'serverless':
+            if aws_region is None:
+                aws_region = 'us-east-1'
+            context.set('aws_region', aws_region)
+            if aws_profile is None:
+                aws_profile = 'default'
+            context.set('aws_profile', aws_profile)
+        
+        if preview:
+            # Generate preview
+            previews = deployment_manager.generate_deployment_preview(
+                deployment_type, 
+                environment,
+                context
+            )
+            
+            console.print(f"[green]Deployment preview for {deployment_type}:[/green]")
+            for path, content in previews.items():
+                console.print(f"\n[bold cyan]File: {path}[/bold cyan]")
+                console.print(content)
+        else:
+            # Generate deployment files
+            generated_files = deployment_manager.generate_deployment(
+                deployment_type,
+                output_dir,
+                environment,
+                context
+            )
+            
+            console.print(f"[green]Successfully generated {deployment_type} deployment:[/green]")
+            for file_path in generated_files:
+                console.print(f"- {file_path}")
+    except ValueError as e:
+        console.print(f"[red]Error generating deployment: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating deployment: {str(e)}[/red]")
+
+@cli.command()
+def list_deployment_types():
+    """List available deployment types."""
+    console.print(Panel(f"[bold blue]Available Deployment Types[/bold blue]"))
+    
+    try:
+        # Initialize deployment manager
+        from .templating import DeploymentManager
+        deployment_manager = DeploymentManager(template_manager)
+        
+        # Load deployment registry
+        registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployments', 'registry', 'deployment_registry.json')
+        if os.path.exists(registry_path):
+            deployment_manager.load_deployment_registry(registry_path)
+        
+        # List deployment types
+        deployment_types = deployment_manager.list_deployment_types()
+        
+        for deployment_type in deployment_types:
+            console.print(f"[bold cyan]{deployment_type['name']}[/bold cyan]: {deployment_type['description']}")
+            if deployment_type.get('required_vars'):
+                console.print(f"  Required variables: {', '.join(deployment_type['required_vars'])}")
+    except Exception as e:
+        console.print(f"[red]Error listing deployment types: {str(e)}[/red]")
+
+@cli.command()
+def list_environments():
+    """List available environments."""
+    console.print(Panel(f"[bold blue]Available Environments[/bold blue]"))
+    
+    try:
+        # Initialize deployment manager
+        from .templating import DeploymentManager
+        deployment_manager = DeploymentManager(template_manager)
+        
+        # Load deployment registry
+        registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'deployments', 'registry', 'deployment_registry.json')
+        if os.path.exists(registry_path):
+            deployment_manager.load_deployment_registry(registry_path)
+        
+        # List environments
+        environments = deployment_manager.list_environments()
+        
+        for environment in environments:
+            console.print(f"[bold cyan]{environment['name']}[/bold cyan]: {environment['description']}")
+            console.print("  Variables:")
+            for key, value in environment.get('variables', {}).items():
+                console.print(f"    {key}: {value}")
+    except Exception as e:
+        console.print(f"[red]Error listing environments: {str(e)}[/red]")

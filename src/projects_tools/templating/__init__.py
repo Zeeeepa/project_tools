@@ -9,5 +9,6 @@ generation, and advanced variable substitution.
 from .template_manager import TemplateManager
 from .component_generator import ComponentGenerator
 from .template_context import TemplateContext
+from .deployment_manager import DeploymentManager
 
-__all__ = ['TemplateManager', 'ComponentGenerator', 'TemplateContext']
+__all__ = ['TemplateManager', 'ComponentGenerator', 'TemplateContext', 'DeploymentManager']
