@@ -207,3 +207,88 @@ def debug(component_path, issue_description, project_path, llm_provider):
         console.print("pip install requests")
     except Exception as e:
         console.print(f"[red]Error debugging component: {str(e)}[/red]")
+
+
+@cli.command()
+@click.argument('project_name')
+@click.argument('description')
+@click.option('--project-path', default=".", help='Path to create the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+@click.option('--include-database/--no-database', default=True, 
+              help='Include database schema and models (default: True)')
+@click.option('--include-tests/--no-tests', default=True, 
+              help='Include unit and integration tests (default: True)')
+@click.option('--db-type', 
+              type=click.Choice(['PostgreSQL', 'MySQL', 'SQLite'], case_sensitive=False),
+              default='PostgreSQL',
+              help='Database type to use (default: PostgreSQL)')
+def create_full_project(project_name, description, project_path, llm_provider, 
+                      include_database, include_tests, db_type):
+    """Create a full project with multiple components based on a description"""
+    console.print(Panel(f"[bold blue]Creating full project: {project_name}[/bold blue]"))
+    
+    try:
+        # Create the project directory
+        full_project_path = os.path.join(project_path, project_name)
+        os.makedirs(full_project_path, exist_ok=True)
+        
+        # Initialize basic project structure
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            # Create basic structure
+            task_id = progress.add_task("Creating basic project structure...", total=None)
+            os.makedirs(os.path.join(full_project_path, "src"), exist_ok=True)
+            os.makedirs(os.path.join(full_project_path, "tests"), exist_ok=True)
+            
+            # Create README.md
+            with open(os.path.join(full_project_path, "README.md"), "w") as f:
+                f.write(f"# {project_name}\n\n{description}\n")
+            
+            # Create .gitignore
+            with open(os.path.join(full_project_path, ".gitignore"), "w") as f:
+                f.write("__pycache__/\n*.py[cod]\n*$py.class\n.env\nvenv/\nnode_modules/\ndist/\nbuild/\n")
+            
+            # Create requirements.txt
+            with open(os.path.join(full_project_path, "requirements.txt"), "w") as f:
+                f.write("# LLM integration dependencies\nrequests>=2.28.0\n")
+                if include_database:
+                    f.write("\n# Database dependencies\nsqlalchemy>=2.0.0\n")
+                    if db_type == "PostgreSQL":
+                        f.write("psycopg2-binary>=2.9.0\n")
+                    elif db_type == "MySQL":
+                        f.write("pymysql>=1.0.0\n")
+            
+            progress.update(task_id, completed=True)
+        
+        # Generate the project components using LLM
+        from .llm_integration import ProjectGenie
+        
+        console.print("\n[bold cyan]Generating project components with LLM:[/bold cyan]")
+        
+        genie = ProjectGenie(full_project_path, llm_provider)
+        components = genie.generate_multi_component_project(
+            description=description,
+            include_database=include_database,
+            include_tests=include_tests,
+            db_type=db_type
+        )
+        
+        console.print(f"[green]Successfully generated {len(components)} components:[/green]")
+        for component in components:
+            console.print(f"- {component['type']}: {component['path']}")
+        
+        console.print(Panel(f"[bold green]Successfully created full project: {project_name}[/bold green]"))
+        console.print(f"[cyan]Project path: {full_project_path}[/cyan]")
+        
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error creating full project: {str(e)}[/red]")
