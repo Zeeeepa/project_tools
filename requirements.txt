@@ -1,4 +1,4 @@
 jinja2
 click
 rich
-click
+requests>=2.28.0
