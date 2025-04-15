@@ -1,0 +1,74 @@
+"""
+{{ module_name }} - {{ module_description }}
+
+{% block module_docstring %}
+This module provides functionality for {{ module_description }}.
+{% endblock %}
+"""
+
+{% block imports %}
+import os
+import sys
+import logging
+from typing import Dict, Any, Optional, List, Union
+{% endblock %}
+
+{% block logger_setup %}
+logger = logging.getLogger(__name__)
+{% endblock %}
+
+{% block constants %}
+# Constants
+{% endblock %}
+
+{% block classes %}
+class {{ class_name }}:
+    """
+    {% block class_docstring %}
+    A class for {{ module_description }}.
+    {% endblock %}
+    """
+    
+    {% block class_init %}
+    def __init__(self, {% block init_params %}{% endblock %}):
+        """
+        Initialize a new {{ class_name }}.
+        
+        {% block init_docstring %}
+        Args:
+            None
+        {% endblock %}
+        """
+        {% block init_body %}
+        pass
+        {% endblock %}
+    {% endblock %}
+    
+    {% block class_methods %}
+    def process(self, data: Any) -> Any:
+        """
+        Process data.
+        
+        Args:
+            data: Data to process
+            
+        Returns:
+            Processed data
+        """
+        return data
+    {% endblock %}
+{% endblock %}
+
+{% block functions %}
+def main():
+    """Main function."""
+    {% block main_function %}
+    {{ class_name_variable }} = {{ class_name }}()
+    print(f"{{ class_name }} initialized")
+    {% endblock %}
+{% endblock %}
+
+{% block main_guard %}
+if __name__ == "__main__":
+    main()
+{% endblock %}

@@ -7,11 +7,28 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
 
+# Import our new templating system
+from .templating import TemplateManager, ComponentGenerator, TemplateContext
+
 # Initialize Jinja2 environment and rich console
 env = Environment(
     loader=PackageLoader('projects_tools', 'templates')
 )
 console = Console()
+
+# Initialize our new templating system
+template_manager = TemplateManager(
+    package_name='projects_tools',
+    template_dir='templates'
+)
+
+# Initialize component generator
+component_generator = ComponentGenerator(template_manager)
+
+# Load component registry
+registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'components', 'registry', 'component_registry.json')
+if os.path.exists(registry_path):
+    component_generator.load_component_registry(registry_path)
 
 @click.group()
 def cli():
@@ -67,24 +84,43 @@ def create(project_name, backend, frontend, frontend_type, enable_proxy, llm_ass
                 f.write('')
             progress.update(task_id, completed=True)
             
-            # Render and write setup.py
+            # Render and write setup.py using our new templating system
             task_id = progress.add_task("Creating setup.py...", total=None)
-            setup_template = env.get_template('setup.py.jinja2')
-            # Replace hyphens with underscores for Python package name            
-            setup_content = setup_template.render(project_name=project_name, python_package_name=python_package_name)
-            with open(os.path.join(project_name, "setup.py"), "w") as f:
-                f.write(setup_content)
+            
+            # Create template context
+            context = TemplateContext({
+                'project_name': project_name,
+                'python_package_name': python_package_name
+            })
+            
+            # Render template to file
+            template_manager.render_to_file(
+                'setup.py.jinja2',
+                os.path.join(project_name, "setup.py"),
+                context
+            )
+            
             progress.update(task_id, completed=True)
             
         if frontend:
             console.print("\n[bold cyan]Setting up Frontend:[/bold cyan]")
             
-            # Render and write Makefile
+            # Render and write Makefile using our new templating system
             task_id = progress.add_task("Creating Makefile...", total=None)
-            makefile_template = env.get_template('Makefile.jinja2')
-            makefile_content = makefile_template.render(project_name=project_name, python_package_name=python_package_name)
-            with open(os.path.join(project_name, "Makefile"), "w") as f:
-                f.write(makefile_content)
+            
+            # Create template context
+            context = TemplateContext({
+                'project_name': project_name,
+                'python_package_name': python_package_name
+            })
+            
+            # Render template to file
+            template_manager.render_to_file(
+                'Makefile.jinja2',
+                os.path.join(project_name, "Makefile"),
+                context
+            )
+            
             progress.update(task_id, completed=True)
                 
             # Execute frontend setup based on type
@@ -100,13 +136,25 @@ def create(project_name, backend, frontend, frontend_type, enable_proxy, llm_ass
                 if not create_react_project(project_name, project_path):
                     return
         
-        # Render and write deploy.sh
+        # Render and write deploy.sh using our new templating system
         task_id = progress.add_task("Creating deploy.sh...", total=None)
-        deploy_template = env.get_template('deploy.sh.jinja2')
-        deploy_content = deploy_template.render(project_name=project_name, python_package_name=python_package_name)
-        with open(os.path.join(project_name, "deploy.sh"), "w") as f:
-            f.write(deploy_content)
+        
+        # Create template context
+        context = TemplateContext({
+            'project_name': project_name,
+            'python_package_name': python_package_name
+        })
+        
+        # Render template to file
+        template_manager.render_to_file(
+            'deploy.sh.jinja2',
+            os.path.join(project_name, "deploy.sh"),
+            context
+        )
+        
+        # Make deploy.sh executable
         os.chmod(os.path.join(project_name, "deploy.sh"), 0o755)
+        
         progress.update(task_id, completed=True)
         
         # Create .gitignore
@@ -116,25 +164,41 @@ def create(project_name, backend, frontend, frontend_type, enable_proxy, llm_ass
         progress.update(task_id, completed=True)
 
         if enable_proxy:
-            # Create proxy.py
+            # Create proxy.py using our new templating system
             task_id = progress.add_task("Creating proxy server...", total=None)
-            proxy_template = env.get_template('proxy.py.jinja2')
-            proxy_content = proxy_template.render(
-                project_name=project_name, 
-                frontend=frontend, 
-                python_package_name=python_package_name,
-                vue=frontend_type == "vue"
+            
+            # Create template context
+            context = TemplateContext({
+                'project_name': project_name,
+                'python_package_name': python_package_name,
+                'frontend': frontend,
+                'vue': frontend_type == "vue"
+            })
+            
+            # Render template to file
+            template_manager.render_to_file(
+                'proxy.py.jinja2',
+                os.path.join(project_name, "src", project_name, "proxy.py"),
+                context
             )
-            with open(os.path.join(project_name, "src", project_name, "proxy.py"), "w") as f:
-                f.write(proxy_content)
+            
             progress.update(task_id, completed=True)
         
-        # Render and write README.md
+        # Render and write README.md using our new templating system
         task_id = progress.add_task("Creating README.md...", total=None)
-        readme_template = env.get_template('README.md.jinja2')
-        readme_content = readme_template.render(project_name=project_name)
-        with open(os.path.join(project_name, "README.md"), "w") as f:
-            f.write(readme_content)
+        
+        # Create template context
+        context = TemplateContext({
+            'project_name': project_name
+        })
+        
+        # Render template to file
+        template_manager.render_to_file(
+            'README.md.jinja2',
+            os.path.join(project_name, "README.md"),
+            context
+        )
+        
         progress.update(task_id, completed=True)
         
     console.print(Panel(f"[bold green]Successfully created project: {project_name}[/bold green]"))
@@ -212,39 +276,37 @@ def debug(component_path, issue_description, project_path, llm_provider):
 @cli.command()
 @click.argument('project_name')
 @click.argument('description')
-@click.option('--project-path', default=".", help='Path to create the project')
+@click.option('--output-path', default=".", help='Path to create the project in')
+@click.option('--include-database', is_flag=True, help='Include database setup')
+@click.option('--include-tests', is_flag=True, help='Include test setup')
+@click.option('--db-type', 
+              type=click.Choice(['SQLite', 'PostgreSQL', 'MySQL'], case_sensitive=False),
+              default='SQLite',
+              help='Database type to use (default: SQLite)')
 @click.option('--llm-provider', 
               type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
               default='openai',
               help='LLM provider to use (default: openai)')
-@click.option('--include-database/--no-database', default=True, 
-              help='Include database schema and models (default: True)')
-@click.option('--include-tests/--no-tests', default=True, 
-              help='Include unit and integration tests (default: True)')
-@click.option('--db-type', 
-              type=click.Choice(['PostgreSQL', 'MySQL', 'SQLite'], case_sensitive=False),
-              default='PostgreSQL',
-              help='Database type to use (default: PostgreSQL)')
-def create_full_project(project_name, description, project_path, llm_provider, 
-                      include_database, include_tests, db_type):
-    """Create a full project with multiple components based on a description"""
+def create_full_project(project_name, description, output_path, include_database, include_tests, db_type, llm_provider):
+    """Create a full project with LLM-generated components"""
     console.print(Panel(f"[bold blue]Creating full project: {project_name}[/bold blue]"))
     
     try:
-        # Create the project directory
-        full_project_path = os.path.join(project_path, project_name)
+        # Create project directory
+        full_project_path = os.path.join(output_path, project_name)
         os.makedirs(full_project_path, exist_ok=True)
         
-        # Initialize basic project structure
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
-            # Create basic structure
-            task_id = progress.add_task("Creating basic project structure...", total=None)
+            task_id = progress.add_task("Setting up project structure...", total=None)
+            
+            # Create basic project structure
             os.makedirs(os.path.join(full_project_path, "src"), exist_ok=True)
             os.makedirs(os.path.join(full_project_path, "tests"), exist_ok=True)
+            os.makedirs(os.path.join(full_project_path, "docs"), exist_ok=True)
             
             # Create README.md
             with open(os.path.join(full_project_path, "README.md"), "w") as f:
@@ -470,3 +532,70 @@ def generate_feedback_report(project_path, output_file, llm_provider):
         console.print("pip install requests")
     except Exception as e:
         console.print(f"[red]Error generating feedback report: {str(e)}[/red]")
+
+@cli.command()
+@click.argument('component_name')
+@click.option('--output-dir', '-o', default=".", help='Output directory')
+@click.option('--module-name', '-m', required=True, help='Module name')
+@click.option('--module-description', '-d', required=True, help='Module description')
+@click.option('--class-name', '-c', required=True, help='Class name')
+@click.option('--data-type', '-t', help='Data type (for data processor component)')
+@click.option('--preview', is_flag=True, help='Preview the component without generating files')
+def generate_component(component_name, output_dir, module_name, module_description, class_name, data_type, preview):
+    """Generate a component from a template"""
+    console.print(Panel(f"[bold blue]Generating component: {component_name}[/bold blue]"))
+    
+    # Create template context
+    context = TemplateContext({
+        'module_name': module_name,
+        'module_description': module_description,
+        'class_name': class_name,
+        'class_name_variable': class_name.lower(),
+        'output_dir': output_dir
+    })
+    
+    # Add data_type if provided
+    if data_type:
+        context.set('data_type', data_type)
+    
+    try:
+        if preview:
+            # Generate component preview
+            previews = component_generator.generate_component_preview(component_name, context)
+            
+            console.print(f"[green]Component preview for {component_name}:[/green]")
+            for path, content in previews.items():
+                console.print(f"\n[bold cyan]File: {path}[/bold cyan]")
+                console.print(content)
+        else:
+            # Generate component
+            generated_files = component_generator.generate_component(component_name, output_dir, context)
+            
+            console.print(f"[green]Successfully generated component {component_name}:[/green]")
+            for file_path in generated_files:
+                console.print(f"- {file_path}")
+    except ValueError as e:
+        console.print(f"[red]Error generating component: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating component: {str(e)}[/red]")
+
+@cli.command()
+def list_components():
+    """List available components"""
+    console.print(Panel(f"[bold blue]Available Components[/bold blue]"))
+    
+    # List base components
+    base_components = component_generator.list_base_components()
+    console.print("\n[bold cyan]Base Components:[/bold cyan]")
+    for component in base_components:
+        console.print(f"- {component['name']}: {component['description']}")
+        if component.get('required_vars'):
+            console.print(f"  Required variables: {', '.join(component['required_vars'])}")
+    
+    # List derived components
+    components = component_generator.list_components()
+    console.print("\n[bold cyan]Derived Components:[/bold cyan]")
+    for component in components:
+        console.print(f"- {component['name']}: {component['description']}")
+        if component.get('base_component'):
+            console.print(f"  Based on: {component['base_component']}")

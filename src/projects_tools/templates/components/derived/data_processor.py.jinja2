@@ -1,0 +1,160 @@
+{% extends "components/base/module.py.jinja2" %}
+
+{% block module_docstring %}
+This module provides data processing functionality for {{ data_type }} data.
+It includes methods for loading, transforming, and saving data.
+{% endblock %}
+
+{% block imports %}
+{{ super() }}
+import json
+import pandas as pd
+import numpy as np
+from pathlib import Path
+{% endblock %}
+
+{% block constants %}
+# Data processing constants
+DEFAULT_INPUT_DIR = "data/input"
+DEFAULT_OUTPUT_DIR = "data/output"
+SUPPORTED_FORMATS = ["csv", "json", "parquet"]
+{% endblock %}
+
+{% block class_docstring %}
+A class for processing {{ data_type }} data.
+This class provides methods for loading, transforming, and saving data.
+{% endblock %}
+
+{% block init_params %}input_dir: str = DEFAULT_INPUT_DIR, output_dir: str = DEFAULT_OUTPUT_DIR{% endblock %}
+
+{% block init_docstring %}
+Args:
+    input_dir: Directory to load data from
+    output_dir: Directory to save data to
+{% endblock %}
+
+{% block init_body %}
+self.input_dir = input_dir
+self.output_dir = output_dir
+
+# Create directories if they don't exist
+os.makedirs(self.input_dir, exist_ok=True)
+os.makedirs(self.output_dir, exist_ok=True)
+
+logger.info(f"Initialized {{ class_name }} with input_dir={self.input_dir}, output_dir={self.output_dir}")
+{% endblock %}
+
+{% block class_methods %}
+{{ super() }}
+
+def load_data(self, filename: str, format: str = None) -> pd.DataFrame:
+    """
+    Load data from a file.
+    
+    Args:
+        filename: Name of the file to load
+        format: Format of the file (csv, json, parquet)
+        
+    Returns:
+        Loaded data as a pandas DataFrame
+    """
+    filepath = os.path.join(self.input_dir, filename)
+    
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+        
+    # Determine format from file extension if not provided
+    if format is None:
+        format = os.path.splitext(filename)[1].lstrip('.')
+        
+    if format not in SUPPORTED_FORMATS:
+        raise ValueError(f"Unsupported format: {format}. Supported formats: {SUPPORTED_FORMATS}")
+        
+    # Load data based on format
+    if format == "csv":
+        return pd.read_csv(filepath)
+    elif format == "json":
+        return pd.read_json(filepath)
+    elif format == "parquet":
+        return pd.read_parquet(filepath)
+        
+def save_data(self, data: pd.DataFrame, filename: str, format: str = None) -> str:
+    """
+    Save data to a file.
+    
+    Args:
+        data: Data to save
+        filename: Name of the file to save to
+        format: Format of the file (csv, json, parquet)
+        
+    Returns:
+        Path to the saved file
+    """
+    # Determine format from file extension if not provided
+    if format is None:
+        format = os.path.splitext(filename)[1].lstrip('.')
+        
+    if format not in SUPPORTED_FORMATS:
+        raise ValueError(f"Unsupported format: {format}. Supported formats: {SUPPORTED_FORMATS}")
+        
+    filepath = os.path.join(self.output_dir, filename)
+    
+    # Save data based on format
+    if format == "csv":
+        data.to_csv(filepath, index=False)
+    elif format == "json":
+        data.to_json(filepath, orient="records")
+    elif format == "parquet":
+        data.to_parquet(filepath, index=False)
+        
+    logger.info(f"Saved data to {filepath}")
+    return filepath
+    
+def transform_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Transform data.
+    
+    Args:
+        data: Data to transform
+        
+    Returns:
+        Transformed data
+    """
+    # Implement your data transformation logic here
+    # This is just a placeholder
+    logger.info(f"Transforming data with shape {data.shape}")
+    
+    # Example transformation: drop duplicates
+    data = data.drop_duplicates()
+    
+    # Example transformation: fill missing values
+    data = data.fillna(0)
+    
+    return data
+{% endblock %}
+
+{% block main_function %}
+# Parse command line arguments
+import argparse
+parser = argparse.ArgumentParser(description="{{ module_description }}")
+parser.add_argument("--input-dir", default=DEFAULT_INPUT_DIR, help="Input directory")
+parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, help="Output directory")
+parser.add_argument("--input-file", required=True, help="Input file")
+parser.add_argument("--output-file", required=True, help="Output file")
+args = parser.parse_args()
+
+# Initialize processor
+processor = {{ class_name }}(input_dir=args.input_dir, output_dir=args.output_dir)
+
+# Process data
+logger.info(f"Loading data from {args.input_file}")
+data = processor.load_data(args.input_file)
+
+logger.info(f"Transforming data")
+transformed_data = processor.transform_data(data)
+
+logger.info(f"Saving data to {args.output_file}")
+output_path = processor.save_data(transformed_data, args.output_file)
+
+logger.info(f"Data processing complete. Output saved to {output_path}")
+{% endblock %}

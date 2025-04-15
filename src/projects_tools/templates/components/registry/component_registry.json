@@ -1,0 +1,25 @@
+{
+  "base_components": {
+    "base_module": {
+      "description": "Base module template for Python modules",
+      "template_files": {
+        "{{ output_dir }}/{{ module_name }}.py": "components/base/module.py.jinja2"
+      },
+      "required_vars": [
+        "module_name",
+        "module_description",
+        "class_name",
+        "class_name_variable"
+      ]
+    }
+  },
+  "components": {
+    "data_processor": {
+      "description": "Data processor component for processing data",
+      "base_component": "base_module",
+      "template_files": {
+        "{{ output_dir }}/{{ module_name }}.py": "components/derived/data_processor.py.jinja2"
+      }
+    }
+  }
+}
