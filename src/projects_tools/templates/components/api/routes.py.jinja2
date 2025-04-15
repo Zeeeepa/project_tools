@@ -1,0 +1,75 @@
+"""
+API routes for {{ module_description }}.
+
+This module provides API routes for {{ module_description }}.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List, Optional
+
+from models.{{ module_name }} import {{ class_name }}
+from schemas.{{ module_name }} import {{ class_name }}Schema, {{ class_name }}CreateSchema, {{ class_name }}UpdateSchema
+from database import get_db
+from crud.{{ module_name }} import (
+    create_{{ module_name }},
+    get_{{ module_name }},
+    get_all_{{ module_name }}s,
+    update_{{ module_name }},
+    delete_{{ module_name }}
+)
+
+router = APIRouter(
+    prefix="/{{ module_name }}s",
+    tags=["{{ module_name }}s"],
+    responses={404: {"description": "Not found"}},
+)
+
+
+@router.post("/", response_model={{ class_name }}Schema, status_code=201)
+def create_{{ module_name }}_route({{ module_name }}: {{ class_name }}CreateSchema, db: Session = Depends(get_db)):
+    """
+    Create a new {{ module_name }}.
+    """
+    return create_{{ module_name }}(db=db, data={{ module_name }}.dict())
+
+
+@router.get("/", response_model=List[{{ class_name }}Schema])
+def read_{{ module_name }}s(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """
+    Get all {{ module_name }}s.
+    """
+    return get_all_{{ module_name }}s(db, skip=skip, limit=limit)
+
+
+@router.get("/{{{ module_name }}_id}", response_model={{ class_name }}Schema)
+def read_{{ module_name }}({{ module_name }}_id: int, db: Session = Depends(get_db)):
+    """
+    Get a {{ module_name }} by ID.
+    """
+    db_{{ module_name }} = get_{{ module_name }}(db, {{ module_name }}_id={{ module_name }}_id)
+    if db_{{ module_name }} is None:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return db_{{ module_name }}
+
+
+@router.put("/{{{ module_name }}_id}", response_model={{ class_name }}Schema)
+def update_{{ module_name }}_route({{ module_name }}_id: int, {{ module_name }}: {{ class_name }}UpdateSchema, db: Session = Depends(get_db)):
+    """
+    Update a {{ module_name }}.
+    """
+    db_{{ module_name }} = update_{{ module_name }}(db, {{ module_name }}_id={{ module_name }}_id, data={{ module_name }}.dict(exclude_unset=True))
+    if db_{{ module_name }} is None:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return db_{{ module_name }}
+
+
+@router.delete("/{{{ module_name }}_id}", status_code=204)
+def delete_{{ module_name }}_route({{ module_name }}_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a {{ module_name }}.
+    """
+    success = delete_{{ module_name }}(db, {{ module_name }}_id={{ module_name }}_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="{{ class_name }} not found")
+    return {"ok": True}

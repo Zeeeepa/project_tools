@@ -1,0 +1,106 @@
+/**
+ * {{ module_description }}
+ * 
+ * This component provides functionality for {{ module_description }}.
+ */
+
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import './{{ module_name }}.css';
+
+/**
+ * {{ class_name }} component
+ */
+const {{ class_name }} = ({ 
+  title = '{{ module_description }}',
+  initialData = [],
+  onSubmit,
+  onCancel,
+  loading = false
+}) => {
+  const [data, setData] = useState(initialData);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  useEffect(() => {
+    // Update data when initialData changes
+    setData(initialData);
+  }, [initialData]);
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (onSubmit) {
+      onSubmit(data);
+    }
+    setIsEditing(false);
+  };
+  
+  const handleCancel = () => {
+    setData(initialData);
+    setIsEditing(false);
+    if (onCancel) {
+      onCancel();
+    }
+  };
+  
+  return (
+    <div className="{{ module_name }}">
+      <div className="{{ module_name }}__header">
+        <h2>{title}</h2>
+        {!isEditing && (
+          <button 
+            className="{{ module_name }}__edit-button"
+            onClick={() => setIsEditing(true)}
+            disabled={loading}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      
+      <div className="{{ module_name }}__content">
+        {loading ? (
+          <div className="{{ module_name }}__loading">Loading...</div>
+        ) : (
+          <div className="{{ module_name }}__data">
+            {/* This is the {{ module_name }} component. */}
+            <p>This is the {{ module_name }} component.</p>
+          </div>
+        )}
+      </div>
+      
+      {isEditing && (
+        <div className="{{ module_name }}__footer">
+          <button 
+            className="{{ module_name }}__cancel-button"
+            onClick={handleCancel}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button 
+            className="{{ module_name }}__submit-button"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            Submit
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+{{ class_name }}.propTypes = {
+  /** Title of the component */
+  title: PropTypes.string,
+  /** Initial data for the component */
+  initialData: PropTypes.array,
+  /** Callback when form is submitted */
+  onSubmit: PropTypes.func,
+  /** Callback when form is cancelled */
+  onCancel: PropTypes.func,
+  /** Whether the component is loading */
+  loading: PropTypes.bool
+};
+
+export default {{ class_name }};

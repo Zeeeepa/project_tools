@@ -1,14 +1,23 @@
 import os
 import click
 import subprocess
+import json
 from jinja2 import Environment, PackageLoader
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import print as rprint
 
-# Import our new templating system
-from .templating import TemplateManager, ComponentGenerator, TemplateContext
+# Import our templating system
+from .templating import (
+    TemplateManager, 
+    ComponentGenerator, 
+    TemplateContext,
+    TemplateRegistry,
+    PatternGenerator,
+    LayoutGenerator
+)
+from .templating.algorithms import generate_crud_operations, generate_form_validation
 
 # Initialize Jinja2 environment and rich console
 env = Environment(
@@ -16,11 +25,35 @@ env = Environment(
 )
 console = Console()
 
-# Initialize our new templating system
+# Initialize our templating system
 template_manager = TemplateManager(
     package_name='projects_tools',
     template_dir='templates'
 )
+
+# Initialize template registry
+template_registry = TemplateRegistry()
+pattern_registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'patterns', 'pattern_registry.json')
+if os.path.exists(pattern_registry_path):
+    template_registry.load_from_file(pattern_registry_path)
+
+# Register algorithm generators
+template_registry.register_algorithm(
+    'generate_crud_operations',
+    generate_crud_operations,
+    ['model_name', 'fields'],
+    {'type': 'python', 'category': 'crud'}
+)
+
+template_registry.register_algorithm(
+    'generate_form_validation',
+    generate_form_validation,
+    ['form_name', 'fields'],
+    {'type': 'javascript', 'category': 'validation'}
+)
+
+# Initialize pattern generator
+pattern_generator = PatternGenerator(template_manager, template_registry)
 
 # Initialize component generator
 component_generator = ComponentGenerator(template_manager)
@@ -29,6 +62,14 @@ component_generator = ComponentGenerator(template_manager)
 registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'components', 'registry', 'component_registry.json')
 if os.path.exists(registry_path):
     component_generator.load_component_registry(registry_path)
+
+# Initialize layout generator
+layout_generator = LayoutGenerator(template_manager, template_registry, pattern_generator)
+
+# Load layout registry
+layout_registry_path = os.path.join(os.path.dirname(__file__), 'templates', 'layouts', 'layout_registry.json')
+if os.path.exists(layout_registry_path):
+    layout_generator.load_layouts_from_file(layout_registry_path)
 
 @click.group()
 def cli():
@@ -253,7 +294,7 @@ def genie(description, project_path, llm_provider):
               help='LLM provider to use (default: openai)')
 def debug(component_path, issue_description, project_path, llm_provider):
     """Debug a component based on issue description"""
-    console.print(Panel(f"[bold blue]Project Genie: Debugging component[/bold blue]"))
+    console.print(Panel(f"[bold blue]Debugging component: {component_path}[/bold blue]"))
     
     try:
         from .llm_integration import ProjectGenie
@@ -262,9 +303,9 @@ def debug(component_path, issue_description, project_path, llm_provider):
         success = genie.debug_component(component_path, issue_description)
         
         if success:
-            console.print(f"[green]Successfully debugged component at {component_path}[/green]")
+            console.print(f"[green]Successfully debugged component: {component_path}[/green]")
         else:
-            console.print(f"[red]Failed to debug component at {component_path}[/red]")
+            console.print(f"[red]Failed to debug component: {component_path}[/red]")
     except ImportError:
         console.print("[red]Error: LLM integration module not found.[/red]")
         console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
@@ -272,88 +313,6 @@ def debug(component_path, issue_description, project_path, llm_provider):
     except Exception as e:
         console.print(f"[red]Error debugging component: {str(e)}[/red]")
 
-
-@cli.command()
-@click.argument('project_name')
-@click.argument('description')
-@click.option('--output-path', default=".", help='Path to create the project in')
-@click.option('--include-database', is_flag=True, help='Include database setup')
-@click.option('--include-tests', is_flag=True, help='Include test setup')
-@click.option('--db-type', 
-              type=click.Choice(['SQLite', 'PostgreSQL', 'MySQL'], case_sensitive=False),
-              default='SQLite',
-              help='Database type to use (default: SQLite)')
-@click.option('--llm-provider', 
-              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
-              default='openai',
-              help='LLM provider to use (default: openai)')
-def create_full_project(project_name, description, output_path, include_database, include_tests, db_type, llm_provider):
-    """Create a full project with LLM-generated components"""
-    console.print(Panel(f"[bold blue]Creating full project: {project_name}[/bold blue]"))
-    
-    try:
-        # Create project directory
-        full_project_path = os.path.join(output_path, project_name)
-        os.makedirs(full_project_path, exist_ok=True)
-        
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task_id = progress.add_task("Setting up project structure...", total=None)
-            
-            # Create basic project structure
-            os.makedirs(os.path.join(full_project_path, "src"), exist_ok=True)
-            os.makedirs(os.path.join(full_project_path, "tests"), exist_ok=True)
-            os.makedirs(os.path.join(full_project_path, "docs"), exist_ok=True)
-            
-            # Create README.md
-            with open(os.path.join(full_project_path, "README.md"), "w") as f:
-                f.write(f"# {project_name}\n\n{description}\n")
-            
-            # Create .gitignore
-            with open(os.path.join(full_project_path, ".gitignore"), "w") as f:
-                f.write("__pycache__/\n*.py[cod]\n*$py.class\n.env\nvenv/\nnode_modules/\ndist/\nbuild/\n")
-            
-            # Create requirements.txt
-            with open(os.path.join(full_project_path, "requirements.txt"), "w") as f:
-                f.write("# LLM integration dependencies\nrequests>=2.28.0\n")
-                if include_database:
-                    f.write("\n# Database dependencies\nsqlalchemy>=2.0.0\n")
-                    if db_type == "PostgreSQL":
-                        f.write("psycopg2-binary>=2.9.0\n")
-                    elif db_type == "MySQL":
-                        f.write("pymysql>=1.0.0\n")
-            
-            progress.update(task_id, completed=True)
-        
-        # Generate the project components using LLM
-        from .llm_integration import ProjectGenie
-        
-        console.print("\n[bold cyan]Generating project components with LLM:[/bold cyan]")
-        
-        genie = ProjectGenie(full_project_path, llm_provider)
-        components = genie.generate_multi_component_project(
-            description=description,
-            include_database=include_database,
-            include_tests=include_tests,
-            db_type=db_type
-        )
-        
-        console.print(f"[green]Successfully generated {len(components)} components:[/green]")
-        for component in components:
-            console.print(f"- {component['type']}: {component['path']}")
-        
-        console.print(Panel(f"[bold green]Successfully created full project: {project_name}[/bold green]"))
-        console.print(f"[cyan]Project path: {full_project_path}[/cyan]")
-        
-    except ImportError:
-        console.print("[red]Error: LLM integration module not found.[/red]")
-        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
-        console.print("pip install requests")
-    except Exception as e:
-        console.print(f"[red]Error creating full project: {str(e)}[/red]")
 
 @cli.command()
 @click.argument('project_path', default=".")
@@ -366,7 +325,7 @@ def create_full_project(project_name, description, output_path, include_database
               help='LLM provider to use (default: openai)')
 def analyze_codebase(project_path, include_patterns, exclude_patterns, output_file, llm_provider):
     """Analyze a codebase and generate insights"""
-    console.print(Panel(f"[bold blue]Analyzing codebase at {project_path}[/bold blue]"))
+    console.print(Panel(f"[bold blue]Analyzing codebase: {project_path}[/bold blue]"))
     
     try:
         from .llm_integration import ProjectGenie
@@ -395,143 +354,6 @@ def analyze_codebase(project_path, include_patterns, exclude_patterns, output_fi
     except Exception as e:
         console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
 
-
-@cli.command()
-@click.argument('component_path')
-@click.option('--args', '-a', multiple=True, help='Arguments to pass to the component')
-@click.option('--project-path', default=".", help='Path to the project')
-@click.option('--llm-provider', 
-              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
-              default='openai',
-              help='LLM provider to use (default: openai)')
-def validate_runtime(component_path, args, project_path, llm_provider):
-    """Validate a component at runtime"""
-    console.print(Panel(f"[bold blue]Runtime validation of {component_path}[/bold blue]"))
-    
-    try:
-        from .llm_integration import ProjectGenie
-        
-        genie = ProjectGenie(project_path, llm_provider)
-        
-        # Convert args to list
-        args_list = list(args) if args else None
-        
-        # Validate the component
-        result = genie.validate_component_runtime(component_path, args_list)
-        
-        if result.success:
-            console.print(f"[green]Runtime validation successful[/green]")
-            if result.output:
-                console.print(f"[cyan]Output:[/cyan]\n{result.output}")
-            console.print(f"[cyan]Execution time: {result.execution_time:.2f}s[/cyan]")
-        else:
-            console.print(f"[red]Runtime validation failed:[/red]")
-            for error in result.errors:
-                console.print(f"[red]  - {error}[/red]")
-            if result.output:
-                console.print(f"[cyan]Output:[/cyan]\n{result.output}")
-    except ImportError:
-        console.print("[red]Error: LLM integration module not found.[/red]")
-        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
-        console.print("pip install requests")
-    except Exception as e:
-        console.print(f"[red]Error validating component: {str(e)}[/red]")
-
-
-@cli.command()
-@click.argument('component_path')
-@click.argument('feedback_type', type=click.Choice(['error', 'warning', 'suggestion', 'issue']))
-@click.argument('feedback_message')
-@click.option('--project-path', default=".", help='Path to the project')
-@click.option('--llm-provider', 
-              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
-              default='openai',
-              help='LLM provider to use (default: openai)')
-def add_feedback(component_path, feedback_type, feedback_message, project_path, llm_provider):
-    """Add feedback for a component"""
-    console.print(Panel(f"[bold blue]Adding feedback for {component_path}[/bold blue]"))
-    
-    try:
-        from .llm_integration import ProjectGenie
-        
-        genie = ProjectGenie(project_path, llm_provider)
-        
-        # Add feedback
-        entry_id = genie.add_feedback(component_path, feedback_type, feedback_message)
-        
-        console.print(f"[green]Feedback added with ID: {entry_id}[/green]")
-    except ImportError:
-        console.print("[red]Error: LLM integration module not found.[/red]")
-        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
-        console.print("pip install requests")
-    except Exception as e:
-        console.print(f"[red]Error adding feedback: {str(e)}[/red]")
-
-
-@cli.command()
-@click.argument('component_path')
-@click.option('--project-path', default=".", help='Path to the project')
-@click.option('--llm-provider', 
-              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
-              default='openai',
-              help='LLM provider to use (default: openai)')
-def improve_component(component_path, project_path, llm_provider):
-    """Improve a component based on feedback"""
-    console.print(Panel(f"[bold blue]Improving component {component_path}[/bold blue]"))
-    
-    try:
-        from .llm_integration import ProjectGenie
-        
-        genie = ProjectGenie(project_path, llm_provider)
-        
-        # Improve the component
-        success = genie.improve_component_from_feedback(component_path)
-        
-        if success:
-            console.print(f"[green]Successfully improved component {component_path}[/green]")
-        else:
-            console.print(f"[yellow]Failed to improve component {component_path}[/yellow]")
-    except ImportError:
-        console.print("[red]Error: LLM integration module not found.[/red]")
-        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
-        console.print("pip install requests")
-    except Exception as e:
-        console.print(f"[red]Error improving component: {str(e)}[/red]")
-
-
-@cli.command()
-@click.option('--project-path', default=".", help='Path to the project')
-@click.option('--output-file', '-o', help='Path to save the report')
-@click.option('--llm-provider', 
-              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
-              default='openai',
-              help='LLM provider to use (default: openai)')
-def generate_feedback_report(project_path, output_file, llm_provider):
-    """Generate a report of feedback"""
-    console.print(Panel(f"[bold blue]Generating feedback report[/bold blue]"))
-    
-    try:
-        from .llm_integration import ProjectGenie
-        
-        genie = ProjectGenie(project_path, llm_provider)
-        
-        # Generate the report
-        report = genie.generate_feedback_report()
-        
-        # Print the report
-        console.print(report)
-        
-        # Save the report if requested
-        if output_file:
-            with open(output_file, 'w') as f:
-                f.write(report)
-            console.print(f"[green]Report saved to {output_file}[/green]")
-    except ImportError:
-        console.print("[red]Error: LLM integration module not found.[/red]")
-        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
-        console.print("pip install requests")
-    except Exception as e:
-        console.print(f"[red]Error generating feedback report: {str(e)}[/red]")
 
 @cli.command()
 @click.argument('component_name')
@@ -579,6 +401,7 @@ def generate_component(component_name, output_dir, module_name, module_descripti
     except Exception as e:
         console.print(f"[red]Error generating component: {str(e)}[/red]")
 
+
 @cli.command()
 def list_components():
     """List available components"""
@@ -599,3 +422,214 @@ def list_components():
         console.print(f"- {component['name']}: {component['description']}")
         if component.get('base_component'):
             console.print(f"  Based on: {component['base_component']}")
+
+
+@cli.command()
+@click.argument('pattern_id')
+@click.option('--output-file', '-o', help='Output file path')
+@click.option('--module-name', '-m', required=True, help='Module name')
+@click.option('--module-description', '-d', required=True, help='Module description')
+@click.option('--class-name', '-c', required=True, help='Class name')
+@click.option('--data-type', '-t', help='Data type (for data processor component)')
+def generate_from_pattern(pattern_id, output_file, module_name, module_description, class_name, data_type):
+    """Generate content from a pattern"""
+    console.print(Panel(f"[bold blue]Generating from pattern: {pattern_id}[/bold blue]"))
+    
+    # Create template context
+    context = TemplateContext({
+        'module_name': module_name,
+        'module_description': module_description,
+        'class_name': class_name,
+        'class_name_variable': class_name.lower()
+    })
+    
+    # Add data_type if provided
+    if data_type:
+        context.set('data_type', data_type)
+    
+    try:
+        # Generate content
+        content = pattern_generator.generate_from_pattern(pattern_id, context, output_file)
+        
+        if output_file:
+            console.print(f"[green]Successfully generated content to {output_file}[/green]")
+        else:
+            console.print(f"[green]Generated content:[/green]")
+            console.print(content)
+    except ValueError as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
+
+
+@cli.command()
+def list_patterns():
+    """List available patterns"""
+    console.print(Panel(f"[bold blue]Available Patterns[/bold blue]"))
+    
+    # List templates
+    templates = template_registry.list_templates()
+    console.print("\n[bold cyan]Templates:[/bold cyan]")
+    for template in templates:
+        console.print(f"- {template['id']}: {template['path']}")
+        if template.get('metadata'):
+            metadata_str = ", ".join([f"{k}: {v}" for k, v in template['metadata'].items()])
+            console.print(f"  Metadata: {metadata_str}")
+    
+    # List patterns
+    patterns = template_registry.list_patterns()
+    console.print("\n[bold cyan]Patterns:[/bold cyan]")
+    for pattern in patterns:
+        console.print(f"- {pattern['id']}")
+        if pattern.get('variables'):
+            console.print(f"  Variables: {', '.join(pattern['variables'])}")
+        if pattern.get('metadata'):
+            metadata_str = ", ".join([f"{k}: {v}" for k, v in pattern['metadata'].items()])
+            console.print(f"  Metadata: {metadata_str}")
+    
+    # List algorithms
+    algorithms = template_registry.list_algorithms()
+    console.print("\n[bold cyan]Algorithms:[/bold cyan]")
+    for algorithm in algorithms:
+        console.print(f"- {algorithm['id']}")
+        if algorithm.get('parameters'):
+            console.print(f"  Parameters: {', '.join(algorithm['parameters'])}")
+        if algorithm.get('metadata'):
+            metadata_str = ", ".join([f"{k}: {v}" for k, v in algorithm['metadata'].items()])
+            console.print(f"  Metadata: {metadata_str}")
+
+
+@cli.command()
+@click.argument('layout_id')
+@click.option('--output-dir', '-o', default=".", help='Output directory')
+@click.option('--module-name', '-m', required=True, help='Module name')
+@click.option('--module-description', '-d', required=True, help='Module description')
+@click.option('--class-name', '-c', required=True, help='Class name')
+@click.option('--data-type', '-t', help='Data type (for data processor component)')
+@click.option('--preview', is_flag=True, help='Preview the layout without generating files')
+def generate_layout(layout_id, output_dir, module_name, module_description, class_name, data_type, preview):
+    """Generate a layout"""
+    console.print(Panel(f"[bold blue]Generating layout: {layout_id}[/bold blue]"))
+    
+    # Create template context
+    context = TemplateContext({
+        'module_name': module_name,
+        'module_description': module_description,
+        'class_name': class_name,
+        'class_name_variable': class_name.lower()
+    })
+    
+    # Add data_type if provided
+    if data_type:
+        context.set('data_type', data_type)
+    
+    try:
+        if preview:
+            # Generate layout preview
+            previews = layout_generator.generate_layout_preview(layout_id, context)
+            
+            console.print(f"[green]Layout preview for {layout_id}:[/green]")
+            for path, content in previews.items():
+                console.print(f"\n[bold cyan]File: {path}[/bold cyan]")
+                console.print(content)
+        else:
+            # Generate layout
+            generated_files = layout_generator.generate_layout(layout_id, context, output_dir)
+            
+            console.print(f"[green]Successfully generated layout {layout_id}:[/green]")
+            for file_path in generated_files:
+                console.print(f"- {file_path}")
+    except ValueError as e:
+        console.print(f"[red]Error generating layout: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating layout: {str(e)}[/red]")
+
+
+@cli.command()
+def list_layouts():
+    """List available layouts"""
+    console.print(Panel(f"[bold blue]Available Layouts[/bold blue]"))
+    
+    # List layouts
+    layouts = layout_generator.list_layouts()
+    for layout in layouts:
+        console.print(f"- {layout['id']}: {layout['description']}")
+        console.print(f"  Components: {layout['component_count']}")
+
+
+@cli.command()
+@click.argument('algorithm_id')
+@click.option('--output-file', '-o', help='Output file path')
+@click.option('--model-name', '-m', required=True, help='Model name')
+@click.option('--fields-json', '-f', required=True, help='JSON string of fields')
+def generate_from_algorithm(algorithm_id, output_file, model_name, fields_json):
+    """Generate content from an algorithm"""
+    console.print(Panel(f"[bold blue]Generating from algorithm: {algorithm_id}[/bold blue]"))
+    
+    try:
+        # Parse fields JSON
+        fields = json.loads(fields_json)
+        
+        # Generate content
+        if algorithm_id == 'generate_crud_operations':
+            content = pattern_generator.generate_from_algorithm(
+                algorithm_id,
+                {'model_name': model_name, 'fields': fields},
+                output_file
+            )
+        elif algorithm_id == 'generate_form_validation':
+            content = pattern_generator.generate_from_algorithm(
+                algorithm_id,
+                {'form_name': model_name, 'fields': fields},
+                output_file
+            )
+        else:
+            raise ValueError(f"Unknown algorithm: {algorithm_id}")
+        
+        if output_file:
+            console.print(f"[green]Successfully generated content to {output_file}[/green]")
+        else:
+            console.print(f"[green]Generated content:[/green]")
+            console.print(content)
+    except ValueError as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
+
+
+@cli.command()
+@click.option('--metadata-key', '-k', required=True, help='Metadata key')
+@click.option('--metadata-value', '-v', required=True, help='Metadata value')
+@click.option('--output-dir', '-o', help='Output directory')
+@click.option('--module-name', '-m', required=True, help='Module name')
+@click.option('--module-description', '-d', required=True, help='Module description')
+@click.option('--class-name', '-c', required=True, help='Class name')
+def generate_by_metadata(metadata_key, metadata_value, output_dir, module_name, module_description, class_name):
+    """Generate content by metadata"""
+    console.print(Panel(f"[bold blue]Generating content by metadata: {metadata_key}={metadata_value}[/bold blue]"))
+    
+    # Create template context
+    context = TemplateContext({
+        'module_name': module_name,
+        'module_description': module_description,
+        'class_name': class_name,
+        'class_name_variable': class_name.lower()
+    })
+    
+    try:
+        # Generate content
+        generated = pattern_generator.find_and_generate(metadata_key, metadata_value, context, output_dir)
+        
+        if output_dir:
+            console.print(f"[green]Successfully generated content to {output_dir}:[/green]")
+            for item_id in generated:
+                console.print(f"- {item_id}")
+        else:
+            console.print(f"[green]Generated content:[/green]")
+            for item_id, content in generated.items():
+                console.print(f"\n[bold cyan]{item_id}:[/bold cyan]")
+                console.print(content)
+    except ValueError as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error generating content: {str(e)}[/red]")
