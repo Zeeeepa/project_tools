@@ -1,0 +1,82 @@
+{
+  "deployment_types": {
+    "docker": {
+      "description": "Docker deployment with docker-compose",
+      "template_files": {
+        "docker-compose.yml": "deployments/docker/docker-compose.yml.jinja2",
+        "Dockerfile": "deployments/docker/Dockerfile.jinja2",
+        ".dockerignore": "deployments/docker/dockerignore.jinja2",
+        "docker/entrypoint.sh": "deployments/docker/entrypoint.sh.jinja2"
+      },
+      "required_vars": [
+        "project_name",
+        "python_package_name",
+        "docker_image_name"
+      ]
+    },
+    "kubernetes": {
+      "description": "Kubernetes deployment with Helm charts",
+      "template_files": {
+        "k8s/Chart.yaml": "deployments/kubernetes/Chart.yaml.jinja2",
+        "k8s/values.yaml": "deployments/kubernetes/values.yaml.jinja2",
+        "k8s/templates/deployment.yaml": "deployments/kubernetes/templates/deployment.yaml.jinja2",
+        "k8s/templates/service.yaml": "deployments/kubernetes/templates/service.yaml.jinja2",
+        "k8s/templates/configmap.yaml": "deployments/kubernetes/templates/configmap.yaml.jinja2",
+        "k8s/templates/secret.yaml": "deployments/kubernetes/templates/secret.yaml.jinja2",
+        "k8s/templates/ingress.yaml": "deployments/kubernetes/templates/ingress.yaml.jinja2"
+      },
+      "required_vars": [
+        "project_name",
+        "python_package_name",
+        "docker_image_name",
+        "kubernetes_namespace"
+      ]
+    },
+    "serverless": {
+      "description": "Serverless deployment with AWS Lambda",
+      "template_files": {
+        "serverless.yml": "deployments/serverless/serverless.yml.jinja2",
+        "handler.py": "deployments/serverless/handler.py.jinja2",
+        "requirements.txt": "deployments/serverless/requirements.txt.jinja2"
+      },
+      "required_vars": [
+        "project_name",
+        "python_package_name",
+        "aws_region",
+        "aws_profile"
+      ]
+    }
+  },
+  "environments": {
+    "development": {
+      "description": "Development environment",
+      "variables": {
+        "debug": true,
+        "log_level": "DEBUG",
+        "database_url": "sqlite:///dev.db",
+        "api_url": "http://localhost:8000",
+        "environment_name": "development"
+      }
+    },
+    "staging": {
+      "description": "Staging environment",
+      "variables": {
+        "debug": true,
+        "log_level": "INFO",
+        "database_url": "postgresql://user:password@db:5432/staging",
+        "api_url": "https://staging-api.example.com",
+        "environment_name": "staging"
+      }
+    },
+    "production": {
+      "description": "Production environment",
+      "variables": {
+        "debug": false,
+        "log_level": "WARNING",
+        "database_url": "postgresql://user:password@db:5432/production",
+        "api_url": "https://api.example.com",
+        "environment_name": "production"
+      }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+FROM {{ base_image | default('python:3.9-slim') }}
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    {% for package in system_packages | default([]) %}
+    {{ package }} \
+    {% endfor %}
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+{% if install_dev_dependencies | default(false) %}
+# Install development dependencies
+COPY requirements-dev.txt .
+RUN pip install -r requirements-dev.txt
+{% endif %}
+
+# Copy project files
+COPY . .
+
+{% if build_frontend | default(false) %}
+# Build frontend
+RUN cd frontend && \
+    npm install && \
+    npm run build
+{% endif %}
+
+# Install the package
+RUN pip install -e .
+
+# Run entrypoint script
+{% if use_entrypoint | default(true) %}
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+{% endif %}
+
+# Default command
+CMD ["{{ command | default('python -m ' + python_package_name) }}"]
