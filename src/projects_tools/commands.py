@@ -292,3 +292,181 @@ def create_full_project(project_name, description, project_path, llm_provider,
         console.print("pip install requests")
     except Exception as e:
         console.print(f"[red]Error creating full project: {str(e)}[/red]")
+
+@cli.command()
+@click.argument('project_path', default=".")
+@click.option('--include-patterns', '-i', multiple=True, help='Glob patterns to include')
+@click.option('--exclude-patterns', '-e', multiple=True, help='Glob patterns to exclude')
+@click.option('--output-file', '-o', help='Path to save analysis results')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def analyze_codebase(project_path, include_patterns, exclude_patterns, output_file, llm_provider):
+    """Analyze a codebase and generate insights"""
+    console.print(Panel(f"[bold blue]Analyzing codebase at {project_path}[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        
+        # Convert include/exclude patterns to lists
+        include_patterns_list = list(include_patterns) if include_patterns else None
+        exclude_patterns_list = list(exclude_patterns) if exclude_patterns else None
+        
+        # Analyze the codebase
+        analysis_results = genie.analyze_codebase(include_patterns_list, exclude_patterns_list)
+        
+        # Visualize the dependency graph
+        console.print("\n[bold cyan]Dependency Graph:[/bold cyan]")
+        genie.visualize_dependency_graph()
+        
+        # Export analysis results if requested
+        if output_file:
+            if genie.export_analysis(output_file):
+                console.print(f"[green]Analysis results exported to {output_file}[/green]")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
+
+
+@cli.command()
+@click.argument('component_path')
+@click.option('--args', '-a', multiple=True, help='Arguments to pass to the component')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def validate_runtime(component_path, args, project_path, llm_provider):
+    """Validate a component at runtime"""
+    console.print(Panel(f"[bold blue]Runtime validation of {component_path}[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        
+        # Convert args to list
+        args_list = list(args) if args else None
+        
+        # Validate the component
+        result = genie.validate_component_runtime(component_path, args_list)
+        
+        if result.success:
+            console.print(f"[green]Runtime validation successful[/green]")
+            if result.output:
+                console.print(f"[cyan]Output:[/cyan]\n{result.output}")
+            console.print(f"[cyan]Execution time: {result.execution_time:.2f}s[/cyan]")
+        else:
+            console.print(f"[red]Runtime validation failed:[/red]")
+            for error in result.errors:
+                console.print(f"[red]  - {error}[/red]")
+            if result.output:
+                console.print(f"[cyan]Output:[/cyan]\n{result.output}")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error validating component: {str(e)}[/red]")
+
+
+@cli.command()
+@click.argument('component_path')
+@click.argument('feedback_type', type=click.Choice(['error', 'warning', 'suggestion', 'issue']))
+@click.argument('feedback_message')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def add_feedback(component_path, feedback_type, feedback_message, project_path, llm_provider):
+    """Add feedback for a component"""
+    console.print(Panel(f"[bold blue]Adding feedback for {component_path}[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        
+        # Add feedback
+        entry_id = genie.add_feedback(component_path, feedback_type, feedback_message)
+        
+        console.print(f"[green]Feedback added with ID: {entry_id}[/green]")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error adding feedback: {str(e)}[/red]")
+
+
+@cli.command()
+@click.argument('component_path')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def improve_component(component_path, project_path, llm_provider):
+    """Improve a component based on feedback"""
+    console.print(Panel(f"[bold blue]Improving component {component_path}[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        
+        # Improve the component
+        success = genie.improve_component_from_feedback(component_path)
+        
+        if success:
+            console.print(f"[green]Successfully improved component {component_path}[/green]")
+        else:
+            console.print(f"[yellow]Failed to improve component {component_path}[/yellow]")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error improving component: {str(e)}[/red]")
+
+
+@cli.command()
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--output-file', '-o', help='Path to save the report')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def generate_feedback_report(project_path, output_file, llm_provider):
+    """Generate a report of feedback"""
+    console.print(Panel(f"[bold blue]Generating feedback report[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        
+        # Generate the report
+        report = genie.generate_feedback_report()
+        
+        # Print the report
+        console.print(report)
+        
+        # Save the report if requested
+        if output_file:
+            with open(output_file, 'w') as f:
+                f.write(report)
+            console.print(f"[green]Report saved to {output_file}[/green]")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error generating feedback report: {str(e)}[/red]")

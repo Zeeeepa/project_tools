@@ -14,8 +14,12 @@ from .llm_client import LLMClient, get_llm_client
 from .context_manager import ProjectContext
 from .code_generator import CodeGenerator
 from .validator import CodeValidator, ValidationResult
+from .runtime_validator import RuntimeValidator, RuntimeValidationResult
 from .db_schema_generator import DBSchemaGenerator
 from .test_generator import TestGenerator
+from .codebase_analyzer import CodebaseAnalyzer
+from .error_collector import ErrorCollector
+from .feedback_loop import FeedbackLoop
 
 console = Console()
 
@@ -34,8 +38,12 @@ class ProjectGenie:
         self.project_context = ProjectContext(project_path)
         self.code_generator = CodeGenerator(self.llm_client, self.project_context)
         self.code_validator = CodeValidator(project_path)
+        self.runtime_validator = RuntimeValidator(project_path)
         self.db_schema_generator = DBSchemaGenerator(self.llm_client, self.project_context)
         self.test_generator = TestGenerator(self.llm_client, self.project_context)
+        self.codebase_analyzer = CodebaseAnalyzer(project_path)
+        self.error_collector = ErrorCollector(project_path)
+        self.feedback_loop = FeedbackLoop(project_path, self.llm_client)
         
     def generate_from_description(self, description: str) -> List[Dict[str, Any]]:
         """Generate components from a natural language description.
@@ -151,6 +159,57 @@ class ProjectGenie:
         """
         return self.code_validator.validate_file(path)
     
+    def validate_component_runtime(self, path: str, args: List[str] = None) -> RuntimeValidationResult:
+        """Validate a component at runtime.
+        
+        Args:
+            path: Path to the component to validate.
+            args: Command-line arguments to pass to the script.
+            
+        Returns:
+            Runtime validation result.
+        """
+        # Determine file type
+        file_ext = os.path.splitext(path)[1].lower()
+        
+        if file_ext == '.py':
+            return self.runtime_validator.validate_python_file(path, args)
+        elif file_ext in ['.js', '.jsx', '.ts', '.tsx']:
+            return self.runtime_validator.validate_javascript_file(path, args)
+        else:
+            return RuntimeValidationResult(False, errors=[f"Unsupported file type for runtime validation: {file_ext}"])
+    
+    def validate_function(self, file_path: str, function_name: str, 
+                        args: List[Any] = None, kwargs: Dict[str, Any] = None) -> RuntimeValidationResult:
+        """Validate a function by executing it.
+        
+        Args:
+            file_path: Path to the file containing the function.
+            function_name: Name of the function to validate.
+            args: Positional arguments to pass to the function.
+            kwargs: Keyword arguments to pass to the function.
+            
+        Returns:
+            Runtime validation result.
+        """
+        return self.runtime_validator.validate_python_function(file_path, function_name, args, kwargs)
+    
+    def validate_api_endpoint(self, file_path: str, endpoint: str, method: str = "GET", 
+                            data: Dict[str, Any] = None, headers: Dict[str, str] = None) -> RuntimeValidationResult:
+        """Validate an API endpoint by making a request to it.
+        
+        Args:
+            file_path: Path to the file containing the API endpoint.
+            endpoint: URL of the endpoint to validate.
+            method: HTTP method to use.
+            data: Data to send with the request.
+            headers: Headers to include in the request.
+            
+        Returns:
+            Runtime validation result.
+        """
+        return self.runtime_validator.validate_api_endpoint(file_path, endpoint, method, data, headers)
+    
     def refine_component(self, path: str, errors: List[str]) -> bool:
         """Refine a component based on validation errors.
         
@@ -207,6 +266,14 @@ Return only the refined code without any explanations or markdown formatting.
                     "errors": errors
                 }
             )
+            
+            # Add feedback
+            for error in errors:
+                self.feedback_loop.add_feedback(
+                    component_path=path,
+                    feedback_type="error",
+                    feedback_message=error
+                )
             
             # Validate the refined code
             validation_result = self.validate_component(path)
@@ -278,11 +345,98 @@ Return only the fixed code without any explanations or markdown formatting.
                 }
             )
             
+            # Add feedback
+            self.feedback_loop.add_feedback(
+                component_path=path,
+                feedback_type="issue",
+                feedback_message=issue_description
+            )
+            
             console.print(f"[green]Successfully debugged component at {path}[/green]")
             return True
         except Exception as e:
             console.print(f"[red]Error debugging component: {str(e)}[/red]")
             return False
+    
+    def analyze_codebase(self, include_patterns: List[str] = None, exclude_patterns: List[str] = None) -> Dict[str, Any]:
+        """Analyze the codebase.
+        
+        Args:
+            include_patterns: List of glob patterns to include.
+            exclude_patterns: List of glob patterns to exclude.
+            
+        Returns:
+            Dictionary of analysis results.
+        """
+        console.print(Panel(f"[bold blue]Analyzing codebase at {self.project_path}[/bold blue]"))
+        
+        # Analyze the codebase
+        analysis_results = self.codebase_analyzer.analyze_codebase(include_patterns, exclude_patterns)
+        
+        # Print summary
+        summary = analysis_results["summary"]
+        console.print(f"[green]Analysis complete:[/green]")
+        console.print(f"  Total files: {summary['total_files']}")
+        console.print(f"  Total lines of code: {summary['total_lines_of_code']}")
+        console.print(f"  Average complexity: {summary['average_complexity']:.2f}")
+        
+        if summary["architectural_patterns"]:
+            console.print(f"  Detected architectural patterns: {', '.join(summary['architectural_patterns'])}")
+        
+        if summary["improvement_suggestions"]:
+            console.print(f"[yellow]Improvement suggestions:[/yellow]")
+            for suggestion in summary["improvement_suggestions"]:
+                console.print(f"  - [{suggestion['priority']}] {suggestion['description']}")
+        
+        return analysis_results
+    
+    def visualize_dependency_graph(self):
+        """Visualize the dependency graph of the codebase."""
+        tree = self.codebase_analyzer.visualize_dependency_graph()
+        console.print(tree)
+    
+    def export_analysis(self, output_path: str) -> bool:
+        """Export analysis results to a file.
+        
+        Args:
+            output_path: Path to save the analysis results.
+            
+        Returns:
+            Whether the export was successful.
+        """
+        return self.codebase_analyzer.export_analysis(output_path)
+    
+    def add_feedback(self, component_path: str, feedback_type: str, feedback_message: str) -> str:
+        """Add feedback for a component.
+        
+        Args:
+            component_path: Path to the component.
+            feedback_type: Type of feedback (e.g., "error", "warning", "suggestion").
+            feedback_message: Feedback message.
+            
+        Returns:
+            ID of the added feedback entry.
+        """
+        return self.feedback_loop.add_feedback(component_path, feedback_type, feedback_message)
+    
+    def improve_component_from_feedback(self, component_path: str) -> bool:
+        """Improve a component based on feedback.
+        
+        Args:
+            component_path: Path to the component.
+            
+        Returns:
+            Whether the improvement was successful.
+        """
+        return self.feedback_loop.improve_component(component_path)
+    
+    def generate_feedback_report(self) -> str:
+        """Generate a report of feedback.
+        
+        Returns:
+            Report as a string.
+        """
+        return self.feedback_loop.generate_feedback_report()
     
     def generate_multi_component_project(self, description: str, 
                                        include_database: bool = True,
@@ -389,5 +543,50 @@ Each requirement should be a specific piece of information that needs to be stor
                             "name": "backend_model_integration",
                             "path": tests_path
                         })
+        
+        # Validate and refine components
+        for component in components:
+            # Syntax validation
+            validation_result = self.validate_component(component["path"])
+            
+            if not validation_result.success:
+                console.print(f"[yellow]Component {component['name']} has validation issues:[/yellow]")
+                for error in validation_result.errors:
+                    console.print(f"[red]  - {error}[/red]")
+                
+                # Try to refine the component
+                refined = self.refine_component(component["path"], validation_result.errors)
+                if refined:
+                    console.print(f"[green]Successfully refined component {component['name']}[/green]")
+            
+            # Runtime validation for Python files
+            if component["path"].endswith(".py") and component["type"] not in ["unit_test", "integration_test"]:
+                try:
+                    runtime_result = self.validate_component_runtime(component["path"])
+                    
+                    if not runtime_result.success:
+                        console.print(f"[yellow]Component {component['name']} has runtime issues:[/yellow]")
+                        for error in runtime_result.errors:
+                            console.print(f"[red]  - {error}[/red]")
+                            
+                            # Add feedback
+                            self.add_feedback(
+                                component_path=component["path"],
+                                feedback_type="runtime_error",
+                                feedback_message=error
+                            )
+                        
+                        # Try to improve the component
+                        improved = self.improve_component_from_feedback(component["path"])
+                        if improved:
+                            console.print(f"[green]Successfully improved component {component['name']}[/green]")
+                except Exception as e:
+                    console.print(f"[red]Error during runtime validation of {component['name']}: {str(e)}[/red]")
+        
+        # Analyze the generated codebase
+        try:
+            self.analyze_codebase()
+        except Exception as e:
+            console.print(f"[red]Error analyzing codebase: {str(e)}[/red]")
         
         return components
