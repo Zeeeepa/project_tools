@@ -27,7 +27,8 @@ def cli():
               default='reactjs',
               help='Frontend type: vue or reactjs (default: reactjs)')
 @click.option('--enable_proxy', is_flag=True, help='Enable proxy server for frontend')
-def create(project_name, backend, frontend, frontend_type, enable_proxy):
+@click.option('--llm-assisted', is_flag=True, help='Enable LLM-assisted code generation')
+def create(project_name, backend, frontend, frontend_type, enable_proxy, llm_assisted):
     """Create a new project with specified components"""
     if not backend and not frontend:
         console.print("[red]Please specify at least one of --backend or --frontend[/red]")
@@ -137,3 +138,72 @@ def create(project_name, backend, frontend, frontend_type, enable_proxy):
         progress.update(task_id, completed=True)
         
     console.print(Panel(f"[bold green]Successfully created project: {project_name}[/bold green]"))
+
+    # If LLM-assisted mode is enabled, set up the LLM integration
+    if llm_assisted:
+        console.print("\n[bold cyan]Setting up LLM integration:[/bold cyan]")
+        
+        # Create requirements.txt with LLM dependencies
+        with open(os.path.join(project_name, "requirements.txt"), "a") as f:
+            f.write("\n# LLM integration dependencies\nrequests>=2.28.0\n")
+        
+        console.print("[green]Added LLM dependencies to requirements.txt[/green]")
+        console.print(Panel("[bold yellow]To use LLM-assisted features, set your API keys as environment variables:[/bold yellow]\n\nFor OpenAI: export OPENAI_API_KEY=your_key_here\nFor Anthropic: export ANTHROPIC_API_KEY=your_key_here"))
+
+
+@cli.command()
+@click.argument('description')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def genie(description, project_path, llm_provider):
+    """Generate code based on natural language description"""
+    console.print(Panel(f"[bold blue]Project Genie: Generating from description[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        components = genie.generate_from_description(description)
+        
+        console.print(f"[green]Successfully generated {len(components)} components:[/green]")
+        for component in components:
+            console.print(f"- {component['name']}: {component['path']}")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error generating code: {str(e)}[/red]")
+
+
+@cli.command()
+@click.argument('component_path')
+@click.argument('issue_description')
+@click.option('--project-path', default=".", help='Path to the project')
+@click.option('--llm-provider', 
+              type=click.Choice(['openai', 'anthropic'], case_sensitive=False),
+              default='openai',
+              help='LLM provider to use (default: openai)')
+def debug(component_path, issue_description, project_path, llm_provider):
+    """Debug a component based on issue description"""
+    console.print(Panel(f"[bold blue]Project Genie: Debugging component[/bold blue]"))
+    
+    try:
+        from .llm_integration import ProjectGenie
+        
+        genie = ProjectGenie(project_path, llm_provider)
+        success = genie.debug_component(component_path, issue_description)
+        
+        if success:
+            console.print(f"[green]Successfully debugged component at {component_path}[/green]")
+        else:
+            console.print(f"[red]Failed to debug component at {component_path}[/red]")
+    except ImportError:
+        console.print("[red]Error: LLM integration module not found.[/red]")
+        console.print("[yellow]Make sure you have the required dependencies installed:[/yellow]")
+        console.print("pip install requests")
+    except Exception as e:
+        console.print(f"[red]Error debugging component: {str(e)}[/red]")
