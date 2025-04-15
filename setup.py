@@ -30,7 +30,7 @@ setup(
     long_description_content_type="text/markdown",
     entry_points={
         'console_scripts': [
-            'projects = projects_tools.commands:cli',
+            'projects = projects_tools.cli.commands:main',
         ]        
     },
     package_dir={"": "src"},
@@ -40,12 +40,23 @@ setup(
             "templates/*.jinja2"
         ],
     },
-    install_requires=install_requires + ['jinja2'],
+    install_requires=install_requires + [
+        'jinja2>=3.0.0',
+        'click>=8.0.0',
+        'rich>=10.0.0',
+        'requests>=2.28.0',
+        'sqlalchemy>=2.0.0',
+        'pytest>=7.0.0',
+        'fastapi>=0.95.0',
+        'uvicorn>=0.21.0',
+        'httpx>=0.24.0',
+        'aiofiles>=0.8.0',
+    ],
     classifiers=[        
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    requires_python=">=3.9",
+    python_requires=">=3.9",
 )
