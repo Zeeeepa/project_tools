@@ -1,0 +1,87 @@
+{
+  "standard_component": {
+    "description": "Standard component layout with base module and tests",
+    "components": [
+      {
+        "type": "template",
+        "id": "base_module",
+        "output_path": "{{ module_name }}.py"
+      },
+      {
+        "type": "pattern",
+        "id": "test_module",
+        "output_path": "tests/test_{{ module_name }}.py"
+      }
+    ]
+  },
+  "data_processor": {
+    "description": "Data processor component with specialized functionality",
+    "components": [
+      {
+        "type": "template",
+        "id": "data_processor",
+        "output_path": "{{ module_name }}.py"
+      },
+      {
+        "type": "pattern",
+        "id": "test_data_processor",
+        "output_path": "tests/test_{{ module_name }}.py"
+      },
+      {
+        "type": "pattern",
+        "id": "data_schema",
+        "output_path": "schemas/{{ module_name }}_schema.py"
+      }
+    ]
+  },
+  "api_component": {
+    "description": "API component with routes and handlers",
+    "components": [
+      {
+        "type": "template",
+        "id": "api_routes",
+        "output_path": "routes/{{ module_name }}.py"
+      },
+      {
+        "type": "template",
+        "id": "api_handlers",
+        "output_path": "handlers/{{ module_name }}_handler.py"
+      },
+      {
+        "type": "pattern",
+        "id": "api_models",
+        "output_path": "models/{{ module_name }}.py"
+      },
+      {
+        "type": "pattern",
+        "id": "test_api",
+        "output_path": "tests/api/test_{{ module_name }}.py"
+      }
+    ]
+  },
+  "ui_component": {
+    "description": "UI component with templates and styles",
+    "components": [
+      {
+        "type": "template",
+        "id": "ui_component",
+        "output_path": "ui/components/{{ module_name }}/{{ module_name }}.js"
+      },
+      {
+        "type": "pattern",
+        "id": "ui_styles",
+        "output_path": "ui/components/{{ module_name }}/{{ module_name }}.css"
+      },
+      {
+        "type": "pattern",
+        "id": "ui_template",
+        "output_path": "ui/components/{{ module_name }}/{{ module_name }}.html"
+      },
+      {
+        "type": "pattern",
+        "id": "test_ui",
+        "output_path": "tests/ui/test_{{ module_name }}.js"
+      }
+    ]
+  }
+}

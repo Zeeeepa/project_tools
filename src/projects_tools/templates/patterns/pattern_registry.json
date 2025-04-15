@@ -1,0 +1,121 @@
+{
+  "templates": {
+    "base_module": {
+      "path": "components/base/module.py.jinja2",
+      "metadata": {
+        "type": "python",
+        "category": "base"
+      }
+    },
+    "data_processor": {
+      "path": "components/derived/data_processor.py.jinja2",
+      "metadata": {
+        "type": "python",
+        "category": "data"
+      }
+    },
+    "api_routes": {
+      "path": "components/api/routes.py.jinja2",
+      "metadata": {
+        "type": "python",
+        "category": "api"
+      }
+    },
+    "api_handlers": {
+      "path": "components/api/handlers.py.jinja2",
+      "metadata": {
+        "type": "python",
+        "category": "api"
+      }
+    },
+    "ui_component": {
+      "path": "components/ui/component.js.jinja2",
+      "metadata": {
+        "type": "javascript",
+        "category": "ui"
+      }
+    }
+  },
+  "patterns": {
+    "test_module": {
+      "template": "import unittest\nfrom {{ module_name }} import {{ class_name }}\n\nclass Test{{ class_name }}(unittest.TestCase):\n    def setUp(self):\n        self.{{ class_name_variable }} = {{ class_name }}()\n    \n    def test_initialization(self):\n        self.assertIsNotNone(self.{{ class_name_variable }})\n    \n    def test_process(self):\n        data = {'test': 'data'}\n        result = self.{{ class_name_variable }}.process(data)\n        self.assertEqual(result, data)\n\nif __name__ == '__main__':\n    unittest.main()",
+      "variables": ["module_name", "class_name", "class_name_variable"],
+      "metadata": {
+        "type": "python",
+        "category": "test"
+      }
+    },
+    "test_data_processor": {
+      "template": "import unittest\nimport pandas as pd\nfrom {{ module_name }} import {{ class_name }}\n\nclass Test{{ class_name }}(unittest.TestCase):\n    def setUp(self):\n        self.{{ class_name_variable }} = {{ class_name }}()\n    \n    def test_initialization(self):\n        self.assertIsNotNone(self.{{ class_name_variable }})\n    \n    def test_transform_data(self):\n        data = pd.DataFrame({'test': ['data', 'data']})\n        result = self.{{ class_name_variable }}.transform_data(data)\n        self.assertEqual(len(result), 1)  # Should remove duplicates\n\nif __name__ == '__main__':\n    unittest.main()",
+      "variables": ["module_name", "class_name", "class_name_variable"],
+      "metadata": {
+        "type": "python",
+        "category": "test"
+      }
+    },
+    "data_schema": {
+      "template": "from marshmallow import Schema, fields\n\nclass {{ class_name }}Schema(Schema):\n    \"\"\"Schema for {{ module_description }}\"\"\"\n    id = fields.String(required=True)\n    name = fields.String(required=True)\n    created_at = fields.DateTime()\n    updated_at = fields.DateTime()\n    {% if data_type %}\n    data_type = fields.String(default='{{ data_type }}')\n    {% endif %}\n    \n    class Meta:\n        ordered = True",
+      "variables": ["class_name", "module_description"],
+      "metadata": {
+        "type": "python",
+        "category": "schema"
+      }
+    },
+    "api_models": {
+      "template": "from sqlalchemy import Column, String, Integer, DateTime\nfrom sqlalchemy.ext.declarative import declarative_base\nfrom datetime import datetime\n\nBase = declarative_base()\n\nclass {{ class_name }}(Base):\n    \"\"\"Model for {{ module_description }}\"\"\"\n    __tablename__ = '{{ module_name }}'\n    \n    id = Column(Integer, primary_key=True)\n    name = Column(String, nullable=False)\n    created_at = Column(DateTime, default=datetime.utcnow)\n    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)\n    {% if data_type %}\n    data_type = Column(String, default='{{ data_type }}')\n    {% endif %}",
+      "variables": ["class_name", "module_name", "module_description"],
+      "metadata": {
+        "type": "python",
+        "category": "model"
+      }
+    },
+    "test_api": {
+      "template": "import unittest\nimport json\nfrom app import create_app\n\nclass Test{{ class_name }}API(unittest.TestCase):\n    def setUp(self):\n        self.app = create_app('testing')\n        self.client = self.app.test_client()\n    \n    def test_get_all(self):\n        response = self.client.get('/api/{{ module_name }}')\n        self.assertEqual(response.status_code, 200)\n        data = json.loads(response.data)\n        self.assertIsInstance(data, list)\n    \n    def test_create(self):\n        payload = {'name': 'Test {{ class_name }}'}\n        response = self.client.post('/api/{{ module_name }}', json=payload)\n        self.assertEqual(response.status_code, 201)\n        data = json.loads(response.data)\n        self.assertEqual(data['name'], 'Test {{ class_name }}')",
+      "variables": ["class_name", "module_name"],
+      "metadata": {
+        "type": "python",
+        "category": "test"
+      }
+    },
+    "ui_styles": {
+      "template": ".{{ module_name }} {\n    display: flex;\n    flex-direction: column;\n    padding: 1rem;\n    margin: 1rem 0;\n    border: 1px solid #ccc;\n    border-radius: 4px;\n}\n\n.{{ module_name }}__header {\n    font-size: 1.2rem;\n    font-weight: bold;\n    margin-bottom: 0.5rem;\n}\n\n.{{ module_name }}__content {\n    flex: 1;\n}\n\n.{{ module_name }}__footer {\n    margin-top: 1rem;\n    text-align: right;\n}",
+      "variables": ["module_name"],
+      "metadata": {
+        "type": "css",
+        "category": "ui"
+      }
+    },
+    "ui_template": {
+      "template": "<div class=\"{{ module_name }}\">\n    <div class=\"{{ module_name }}__header\">\n        <h2>{{ module_description }}</h2>\n    </div>\n    <div class=\"{{ module_name }}__content\">\n        <!-- Content goes here -->\n        <p>This is the {{ module_name }} component.</p>\n    </div>\n    <div class=\"{{ module_name }}__footer\">\n        <button class=\"{{ module_name }}__button\">Submit</button>\n    </div>\n</div>",
+      "variables": ["module_name", "module_description"],
+      "metadata": {
+        "type": "html",
+        "category": "ui"
+      }
+    },
+    "test_ui": {
+      "template": "import { render, screen, fireEvent } from '@testing-library/react';\nimport {{ class_name }} from '../components/{{ module_name }}/{{ module_name }}';\n\ndescribe('{{ class_name }} Component', () => {\n    test('renders without crashing', () => {\n        render(<{{ class_name }} />);\n        const element = screen.getByText(/{{ module_name }} component/i);\n        expect(element).toBeInTheDocument();\n    });\n    \n    test('button click works', () => {\n        const handleClick = jest.fn();\n        render(<{{ class_name }} onClick={handleClick} />);\n        const button = screen.getByText(/submit/i);\n        fireEvent.click(button);\n        expect(handleClick).toHaveBeenCalledTimes(1);\n    });\n});",
+      "variables": ["class_name", "module_name"],
+      "metadata": {
+        "type": "javascript",
+        "category": "test"
+      }
+    }
+  },
+  "algorithms": {
+    "generate_crud_operations": {
+      "parameters": ["model_name", "fields"],
+      "metadata": {
+        "type": "python",
+        "category": "crud"
+      }
+    },
+    "generate_form_validation": {
+      "parameters": ["form_name", "fields"],
+      "metadata": {
+        "type": "javascript",
+        "category": "validation"
+      }
+    }
+  }
+}
