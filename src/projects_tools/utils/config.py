@@ -10,6 +10,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+import importlib.resources
 
 logger = logging.getLogger(__name__)
 
@@ -273,9 +274,17 @@ def init_config():
     
     # Set runtime values
     if config.get("project.templates_dir") is None:
-        import pkg_resources
-        templates_dir = pkg_resources.resource_filename("projects_tools", "templates")
-        config.set("project.templates_dir", templates_dir)
+        try:
+            # Use importlib.resources instead of pkg_resources
+            from importlib.resources import files
+            templates_dir = str(files("projects_tools") / "templates")
+            config.set("project.templates_dir", templates_dir)
+        except (ImportError, ModuleNotFoundError):
+            # Fallback for older Python versions
+            import os
+            import projects_tools
+            templates_dir = os.path.join(os.path.dirname(projects_tools.__file__), "templates")
+            config.set("project.templates_dir", templates_dir)
 
 # Initialize configuration when module is imported
 init_config()
