@@ -8,13 +8,13 @@ This package provides tools for creating and managing projects, including:
 - Configuration management
 """
 
-from .version import __version__
-
 # Initialize logging
 from .utils.logging import configure_logging
+from .version import __version__
+
 configure_logging()
 
-# Import main CLI entry point
-from .cli.commands import cli, main
+# Don't import CLI commands here to avoid circular imports
+# These will be imported when needed
 
-__all__ = ["__version__", "cli", "main"]
+__all__ = ["__version__"]
