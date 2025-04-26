@@ -1,99 +1,96 @@
 """
-Logging utilities for projects_tools.
+Logging configuration for projects_tools.
 
 This module provides a centralized logging configuration for projects_tools.
 """
 
 import logging
+import os
 import sys
-from pathlib import Path
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union
 
-# Default logging format
-DEFAULT_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# Default log level
+DEFAULT_LOG_LEVEL = logging.INFO
 
-# Default logging level
-DEFAULT_LEVEL = logging.INFO
+# Log format
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+SIMPLE_FORMAT = "%(message)s"
+
+# Environment variable for log level
+LOG_LEVEL_ENV_VAR = "PROJECTS_TOOLS_LOG_LEVEL"
 
 
-def configure_logging(
-    level: Optional[Union[int, str]] = None,
-    format_str: Optional[str] = None,
-    log_file: Optional[Union[str, Path]] = None,
-    log_to_console: bool = True,
-    log_to_file: bool = False,
-    config: Optional[Dict[str, Any]] = None,
-) -> None:
+def get_log_level() -> int:
+    """
+    Get the log level from environment variable or use default.
+
+    Returns:
+        Log level as an integer.
+    """
+    log_level_str = os.environ.get(LOG_LEVEL_ENV_VAR)
+    if log_level_str:
+        log_level_str = log_level_str.upper()
+        if log_level_str in logging._nameToLevel:
+            return logging._nameToLevel[log_level_str]
+        try:
+            return int(log_level_str)
+        except ValueError:
+            pass
+    return DEFAULT_LOG_LEVEL
+
+
+def configure_logging(level: Optional[Union[int, str]] = None) -> None:
     """
     Configure logging for projects_tools.
 
     Args:
-        level: Logging level. If None, will use the default level.
-        format_str: Logging format string. If None, will use the default format.
-        log_file: Path to the log file. If None and log_to_file is True, will
-            use a default location.
-        log_to_console: Whether to log to the console.
-        log_to_file: Whether to log to a file.
-        config: Additional configuration for logging.
+        level: Log level to use. If None, will use the level from environment
+            variable or default.
     """
-    # Get the root logger
-    logger = logging.getLogger("projects_tools")
-
-    # Clear existing handlers
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-
-    # Set level
     if level is None:
-        level = DEFAULT_LEVEL
-    elif isinstance(level, str):
-        level = getattr(logging, level.upper())
-    logger.setLevel(level)
+        level = get_log_level()
 
-    # Set format
-    if format_str is None:
-        format_str = DEFAULT_FORMAT
-    formatter = logging.Formatter(format_str)
+    # Configure root logger
+    logging.basicConfig(
+        level=level,
+        format=LOG_FORMAT,
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
 
-    # Add console handler
-    if log_to_console:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+    # Configure projects_tools logger
+    logger = logging.getLogger("projects_tools")
+    if isinstance(level, (int, str)):
+        logger.setLevel(level)
 
-    # Add file handler
-    if log_to_file:
-        if log_file is None:
-            log_file = Path.home() / ".projects_tools" / "logs" / "projects_tools.log"
-        
-        # Create directory if it doesn't exist
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
-
-    # Apply additional configuration
-    if config:
-        # Configure specific loggers
-        for logger_name, logger_config in config.get("loggers", {}).items():
-            logger = logging.getLogger(logger_name)
-            if "level" in logger_config:
-                level = logger_config["level"]
-                if isinstance(level, str):
-                    level = getattr(logging, level.upper())
-                logger.setLevel(level)
+    # Silence some noisy loggers
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Get a logger for a module.
+    Get a logger with the given name.
 
     Args:
-        name: Name of the module.
+        name: Logger name.
 
     Returns:
         Logger instance.
     """
-    return logging.getLogger(f"projects_tools.{name}")
+    return logging.getLogger(name)
+
+
+def set_log_level(level: Optional[Union[int, str]]) -> None:
+    """
+    Set the log level for projects_tools loggers.
+
+    Args:
+        level: Log level to set.
+    """
+    if level is None:
+        level = get_log_level()
+
+    # Set level for projects_tools logger
+    logger = logging.getLogger("projects_tools")
+    if isinstance(level, (int, str)):
+        logger.setLevel(level)

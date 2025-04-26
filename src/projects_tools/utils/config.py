@@ -5,11 +5,11 @@ This module provides a centralized configuration system that supports loading
 configuration from environment variables, configuration files, and CLI arguments.
 """
 
-import os
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, cast
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,10 @@ DEFAULT_CONFIG = {
 class Config:
     """Configuration manager for projects_tools."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration with default values."""
         self._config = DEFAULT_CONFIG.copy()
-        self._config_file_path = None
+        self._config_file_path: Optional[Path] = None
         self._loaded_from_file = False
         self._loaded_from_env = False
 
@@ -90,18 +90,20 @@ class Config:
                 logger.debug("No configuration file found in standard locations")
                 return False
 
+        file_path_obj = Path(file_path) if isinstance(file_path, str) else file_path
+
         try:
-            with open(file_path, "r") as f:
+            with open(file_path_obj, "r") as f:
                 file_config = json.load(f)
-            
+
             # Update configuration with values from file
             self._update_config(file_config)
-            self._config_file_path = file_path
+            self._config_file_path = file_path_obj
             self._loaded_from_file = True
-            logger.info(f"Loaded configuration from {file_path}")
+            logger.info(f"Loaded configuration from {file_path_obj}")
             return True
         except Exception as e:
-            logger.warning(f"Error loading configuration from {file_path}: {e}")
+            logger.warning(f"Error loading configuration from {file_path_obj}: {e}")
             return False
 
     def load_from_env(self) -> bool:
@@ -121,23 +123,25 @@ class Config:
         for key, value in os.environ.items():
             if key.startswith(prefix):
                 # Remove prefix and split by double underscore
-                config_key = key[len(prefix):].lower()
+                config_key = key[len(prefix) :].lower()
                 parts = config_key.split("__")
-                
+
                 # Convert value to appropriate type
                 if value.lower() in ("true", "yes", "1"):
-                    value = True
+                    typed_value: Any = True
                 elif value.lower() in ("false", "no", "0"):
-                    value = False
+                    typed_value = False
                 elif value.isdigit():
-                    value = int(value)
+                    typed_value = int(value)
                 elif value.replace(".", "", 1).isdigit() and value.count(".") == 1:
-                    value = float(value)
-                
+                    typed_value = float(value)
+                else:
+                    typed_value = value
+
                 # Update configuration
-                self._set_nested_value(self._config, parts, value)
+                self._set_nested_value(self._config, parts, typed_value)
                 loaded = True
-        
+
         self._loaded_from_env = loaded
         if loaded:
             logger.info("Loaded configuration from environment variables")
@@ -164,14 +168,14 @@ class Config:
             Configuration value or default.
         """
         parts = key.split(".")
-        value = self._config
-        
+        value: Any = self._config
+
         for part in parts:
             if isinstance(value, dict) and part in value:
                 value = value[part]
             else:
                 return default
-        
+
         return value
 
     def set(self, key: str, value: Any) -> None:
@@ -192,16 +196,23 @@ class Config:
         Args:
             config_dict: Dictionary with configuration values.
         """
-        def update_nested(target, source):
+
+        def update_nested(target: Dict[str, Any], source: Dict[str, Any]) -> None:
             for key, value in source.items():
-                if isinstance(value, dict) and key in target and isinstance(target[key], dict):
-                    update_nested(target[key], value)
+                if (
+                    isinstance(value, dict)
+                    and key in target
+                    and isinstance(target[key], dict)
+                ):
+                    update_nested(cast(Dict[str, Any], target[key]), value)
                 else:
                     target[key] = value
-        
+
         update_nested(self._config, config_dict)
 
-    def _set_nested_value(self, config_dict: Dict[str, Any], keys: list, value: Any) -> None:
+    def _set_nested_value(
+        self, config_dict: Dict[str, Any], keys: list, value: Any
+    ) -> None:
         """
         Set a nested value in the configuration dictionary.
 
@@ -213,15 +224,15 @@ class Config:
         if len(keys) == 1:
             config_dict[keys[0]] = value
             return
-        
+
         key = keys[0]
         if key not in config_dict:
             config_dict[key] = {}
-        
+
         if not isinstance(config_dict[key], dict):
             config_dict[key] = {}
-        
-        self._set_nested_value(config_dict[key], keys[1:], value)
+
+        self._set_nested_value(cast(Dict[str, Any], config_dict[key]), keys[1:], value)
 
     def save_to_file(self, file_path: Optional[Union[str, Path]] = None) -> bool:
         """
@@ -240,15 +251,17 @@ class Config:
                 file_path = self._config_file_path
             else:
                 file_path = Path.home() / ".projects_tools.json"
-        
+
+        file_path_obj = Path(file_path) if isinstance(file_path, str) else file_path
+
         try:
-            with open(file_path, "w") as f:
+            with open(file_path_obj, "w") as f:
                 json.dump(self._config, f, indent=2)
-            
-            logger.info(f"Saved configuration to {file_path}")
+
+            logger.info(f"Saved configuration to {file_path_obj}")
             return True
         except Exception as e:
-            logger.warning(f"Error saving configuration to {file_path}: {e}")
+            logger.warning(f"Error saving configuration to {file_path_obj}: {e}")
             return False
 
     def as_dict(self) -> Dict[str, Any]:
@@ -264,18 +277,22 @@ class Config:
 # Global configuration instance
 config = Config()
 
+
 # Initialize configuration
-def init_config():
+def init_config() -> None:
     """Initialize configuration from files and environment variables."""
     # Load from file first, then override with environment variables
     config.load_from_file()
     config.load_from_env()
-    
+
     # Set runtime values
     if config.get("project.templates_dir") is None:
-        import pkg_resources
-        templates_dir = pkg_resources.resource_filename("projects_tools", "templates")
-        config.set("project.templates_dir", templates_dir)
+        try:
+            # Using a try-except block to handle missing pkg_resources
+            # which might happen during testing
+            import pkg_resources  # type: ignore
 
-# Initialize configuration when module is imported
-init_config()
+            templates_dir = pkg_resources.resource_filename("projects_tools", "templates")
+            config.set("project.templates_dir", templates_dir)
+        except Exception as e:
+            logger.warning(f"Error setting templates directory: {e}")
