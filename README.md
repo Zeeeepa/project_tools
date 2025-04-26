@@ -70,17 +70,15 @@ projects configure --save
 
 This tool integrates with OpenAI and Anthropic APIs to provide AI-assisted features:
 
-### Setting up API Keys
+### Setting up API Keys (Development)
 
-For OpenAI:
+For development environments only:
 ```bash
 export OPENAI_API_KEY=your_key_here
-```
-
-For Anthropic:
-```bash
 export ANTHROPIC_API_KEY=your_key_here
 ```
+
+For production, we recommend using a secrets manager or encrypted configuration files. See our [Security Best Practices](docs/security.md) guide.
 
 ### Available LLM Features
 
@@ -200,7 +198,9 @@ Example configuration:
   "llm": {
     "default_provider": "openai",
     "openai": {
-      "model": "gpt-4"
+      "model": "gpt-4",
+      "timeout": 30,
+      "retry_attempts": 3
     },
     "anthropic": {
       "model": "claude-3-opus-20240229"
@@ -208,6 +208,18 @@ Example configuration:
   },
   "project": {
     "default_frontend": "reactjs"
+  },
+  "templates": {
+    "path": "./custom_templates",
+    "default_component": "basic"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "~/.logs/projects_tools.log"
+  },
+  "error_handling": {
+    "retry_enabled": true,
+    "max_retries": 3
   }
 }
 ```
