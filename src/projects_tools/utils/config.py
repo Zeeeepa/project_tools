@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, cast
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class Config:
     def __init__(self) -> None:
         """Initialize configuration with default values."""
         self._config = DEFAULT_CONFIG.copy()
-        self._config_file_path = None
+        self._config_file_path: Optional[Path] = None
         self._loaded_from_file = False
         self._loaded_from_env = False
 
@@ -90,18 +90,20 @@ class Config:
                 logger.debug("No configuration file found in standard locations")
                 return False
 
+        file_path_obj = Path(file_path) if isinstance(file_path, str) else file_path
+
         try:
-            with open(file_path, "r") as f:
+            with open(file_path_obj, "r") as f:
                 file_config = json.load(f)
 
             # Update configuration with values from file
             self._update_config(file_config)
-            self._config_file_path = file_path
+            self._config_file_path = file_path_obj
             self._loaded_from_file = True
-            logger.info(f"Loaded configuration from {file_path}")
+            logger.info(f"Loaded configuration from {file_path_obj}")
             return True
         except Exception as e:
-            logger.warning(f"Error loading configuration from {file_path}: {e}")
+            logger.warning(f"Error loading configuration from {file_path_obj}: {e}")
             return False
 
     def load_from_env(self) -> bool:
@@ -166,7 +168,7 @@ class Config:
             Configuration value or default.
         """
         parts = key.split(".")
-        value = self._config
+        value: Any = self._config
 
         for part in parts:
             if isinstance(value, dict) and part in value:
@@ -202,7 +204,7 @@ class Config:
                     and key in target
                     and isinstance(target[key], dict)
                 ):
-                    update_nested(target[key], value)
+                    update_nested(cast(Dict[str, Any], target[key]), value)
                 else:
                     target[key] = value
 
@@ -230,7 +232,7 @@ class Config:
         if not isinstance(config_dict[key], dict):
             config_dict[key] = {}
 
-        self._set_nested_value(config_dict[key], keys[1:], value)
+        self._set_nested_value(cast(Dict[str, Any], config_dict[key]), keys[1:], value)
 
     def save_to_file(self, file_path: Optional[Union[str, Path]] = None) -> bool:
         """
@@ -250,14 +252,16 @@ class Config:
             else:
                 file_path = Path.home() / ".projects_tools.json"
 
+        file_path_obj = Path(file_path) if isinstance(file_path, str) else file_path
+
         try:
-            with open(file_path, "w") as f:
+            with open(file_path_obj, "w") as f:
                 json.dump(self._config, f, indent=2)
 
-            logger.info(f"Saved configuration to {file_path}")
+            logger.info(f"Saved configuration to {file_path_obj}")
             return True
         except Exception as e:
-            logger.warning(f"Error saving configuration to {file_path}: {e}")
+            logger.warning(f"Error saving configuration to {file_path_obj}: {e}")
             return False
 
     def as_dict(self) -> Dict[str, Any]:
@@ -284,14 +288,11 @@ def init_config() -> None:
     # Set runtime values
     if config.get("project.templates_dir") is None:
         try:
-            import pkg_resources
+            # Using a try-except block to handle missing pkg_resources
+            # which might happen during testing
+            import pkg_resources  # type: ignore
 
             templates_dir = pkg_resources.resource_filename("projects_tools", "templates")
             config.set("project.templates_dir", templates_dir)
         except Exception as e:
             logger.warning(f"Error setting templates directory: {e}")
-
-
-# Only initialize config when explicitly called, not on import
-# This prevents circular imports during testing
-# init_config()
