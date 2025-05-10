@@ -51,6 +51,8 @@ setup(
         'uvicorn>=0.21.0',
         'httpx>=0.24.0',
         'aiofiles>=0.8.0',
+        'networkx>=3.0',
+        'plotly>=5.13.0',
     ],
     classifiers=[        
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
