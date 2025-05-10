@@ -339,3 +339,4 @@ def get_default_value(field: Dict[str, Any]) -> str:
         return "false"
     else:
         return "''"
+
