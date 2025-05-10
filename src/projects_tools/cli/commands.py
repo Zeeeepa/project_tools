@@ -206,9 +206,34 @@ def debug(component_path, issue_description, project_path, llm_provider):
     default=None,
     help="LLM provider to use (default: from config)",
 )
-def analyze_codebase(project_path, include_patterns, exclude_patterns, output_file, llm_provider):
+@click.option(
+    "--visualization",
+    "-v",
+    type=click.Choice([
+        "dependency", "react", "inheritance", "module", 
+        "blast-radius", "http", "usage"
+    ], case_sensitive=False),
+    default="dependency",
+    help="Type of visualization to generate",
+)
+@click.option(
+    "--target-file",
+    help="Target file for blast radius visualization",
+)
+@click.option(
+    "--symbol-name",
+    help="Symbol name for usage relationship visualization",
+)
+@click.option(
+    "--root-component",
+    help="Root component for React component tree visualization",
+)
+def analyze_codebase(
+    project_path, include_patterns, exclude_patterns, output_file, 
+    llm_provider, visualization, target_file, symbol_name, root_component
+):
     """Analyze a codebase and generate insights."""
-    from ..llm.analyzer import CodebaseAnalyzer
+    from ..llm_integration.codebase_analyzer import CodebaseAnalyzer
 
     try:
         # Validate inputs
@@ -222,7 +247,7 @@ def analyze_codebase(project_path, include_patterns, exclude_patterns, output_fi
         print_info(f"Analyzing codebase at {project_path}")
 
         # Create analyzer
-        analyzer = CodebaseAnalyzer(project_path, llm_provider)
+        analyzer = CodebaseAnalyzer(project_path)
 
         # Convert include/exclude patterns to lists
         include_patterns_list = list(include_patterns) if include_patterns else None
@@ -234,9 +259,62 @@ def analyze_codebase(project_path, include_patterns, exclude_patterns, output_fi
         # Print analysis results
         print_analysis_results(analysis_results)
 
-        # Visualize the dependency graph
-        print_info("Dependency Graph:")
-        analyzer.visualize_dependency_graph()
+        # Generate the requested visualization
+        print_info(f"Generating {visualization} visualization...")
+        
+        if visualization == "dependency":
+            # Visualize the dependency graph
+            analyzer.visualize_dependency_graph()
+        elif visualization == "react":
+            # Visualize React component tree
+            result = analyzer.visualize_react_component_tree(root_component)
+            print_info(f"React Component Tree (Root: {result.get('root_component')})")
+            print_info(f"Component Count: {result.get('component_count')}")
+        elif visualization == "inheritance":
+            # Visualize inheritance graph
+            result = analyzer.visualize_inheritance_graph()
+            print_info(f"Class Inheritance Hierarchy")
+            print_info(f"Class Count: {result.get('class_count')}")
+            print_info(f"Root Classes: {', '.join(result.get('root_classes', []))}")
+        elif visualization == "module":
+            # Visualize module dependencies
+            result = analyzer.visualize_module_dependency()
+            print_info(f"Module Dependency Graph")
+            print_info(f"Module Count: {result.get('module_count')}")
+            print_info(f"Dependency Count: {result.get('dependency_count')}")
+        elif visualization == "blast-radius":
+            # Validate target file
+            if not target_file:
+                print_error("Target file is required for blast radius visualization")
+                return
+            
+            # Visualize blast radius
+            result = analyzer.visualize_blast_radius(target_file)
+            print_info(f"Blast Radius for {target_file}")
+            print_info(f"Direct Impact: {result.get('direct_impact')} files")
+            print_info(f"Indirect Impact: {result.get('indirect_impact')} files")
+            print_info(f"Total Impact: {result.get('total_impact')} files ({result.get('impact_percentage')}% of codebase)")
+        elif visualization == "http":
+            # Visualize HTTP endpoints
+            result = analyzer.visualize_http_endpoints()
+            print_info(f"HTTP Endpoints")
+            print_info(f"Endpoint Count: {result.get('endpoint_count')}")
+            
+            # Print methods breakdown
+            methods = result.get('methods', {})
+            if methods:
+                print_info("HTTP Methods:")
+                for method, count in methods.items():
+                    print_info(f"  {method}: {count}")
+        elif visualization == "usage":
+            # Visualize usage relationships
+            result = analyzer.visualize_usage_relationships(symbol_name)
+            if symbol_name:
+                print_info(f"Symbol Usage: {symbol_name}")
+            else:
+                print_info(f"Top Symbol Usages")
+            print_info(f"Symbol Count: {result.get('symbol_count')}")
+            print_info(f"File Count: {result.get('file_count')}")
 
         # Export analysis results if requested
         if output_file:
