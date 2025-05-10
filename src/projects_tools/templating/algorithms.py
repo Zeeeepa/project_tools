@@ -50,25 +50,8 @@ def generate_crud_operations(model_name: str, fields: List[Dict[str, Any]]) -> s
             field_validations.append(f"        raise ValueError(\"'{field_name}' must be a boolean\")")
     
     # Generate create function
-    create_function = f"""
-def create_{model_name.lower()}(db: Session, data: Dict[str, Any]) -> {model_name}:
-    \"\"\"
-    Create a new {model_name}.
-    
-    Args:
-        db: Database session
-        data: Data for the new {model_name}
-        
-    Returns:
-        Created {model_name}
-    \"\"\"
-{"".join(f"    {line}\\n" for line in field_validations)}
-    db_obj = {model_name}(**data)
-    db.add(db_obj)
-    db.commit()
-    db.refresh(db_obj)
-    return db_obj
-"""
+    create_function = f\"\"\"\ndef create_{model_name.lower()}(db: Session, data: Dict[str, Any]) -> {model_name}:
+    \\\"\\\"\\\"\n    Create a new {model_name}.\n    \n    Args:\n        db: Database session\n        data: Data for the new {model_name}\n        \n    Returns:\n        Created {model_name}\n    \\\"\\\"\\\"\n{"".join(f"    {line}\n" for line in field_validations)}\n    db_obj = {model_name}(**data)\n    db.add(db_obj)\n    db.commit()\n    db.refresh(db_obj)\n    return db_obj\n\"\"\"
     
     # Generate get function
     get_function = f"""
@@ -234,11 +217,9 @@ def generate_form_validation(form_name: str, fields: List[Dict[str, Any]]) -> st
                 
             schema_fields.append(schema_field)
     
-    schema = f"""
-const {form_name}Schema = z.object({{{
+    schema = f\"\"\"\nconst {form_name}Schema = z.object({{{
     '\\n'.join(schema_fields)
-}}});
-"""
+}}});\n\"\"\"
     
     # Generate hook
     initial_values = ", ".join([f"{field['name']}: {get_default_value(field)}" for field in fields])
