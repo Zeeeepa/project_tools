@@ -62,7 +62,7 @@ def create_{model_name.lower()}(db: Session, data: Dict[str, Any]) -> {model_nam
     Returns:
         Created {model_name}
     \"\"\"
-{"".join(f"    {line}\\n" for line in field_validations)}
+{"".join(f"    {line}\n" for line in field_validations)}
     db_obj = {model_name}(**data)
     db.add(db_obj)
     db.commit()
@@ -235,9 +235,9 @@ def generate_form_validation(form_name: str, fields: List[Dict[str, Any]]) -> st
             schema_fields.append(schema_field)
     
     schema = f"""
-const {form_name}Schema = z.object({{{
-    '\\n'.join(schema_fields)
-}}});
+const {form_name}Schema = z.object({{
+    {'\n'.join(schema_fields)}
+}});
 """
     
     # Generate hook
@@ -339,3 +339,4 @@ def get_default_value(field: Dict[str, Any]) -> str:
         return "false"
     else:
         return "''"
+
